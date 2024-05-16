@@ -12,7 +12,7 @@ setup(
     long_description_content_type='text/markdown',
     author='上海凌瓴信息科技有限公司',
     author_email='marx@galatech.com.cn',
-    url='https://github.com/yourusername/your-library-name',
+    url='https://gitee.com/lltech/pricelib',
     install_requires=[
         'numpy>=1.24.1, <=1.26.4',
         'pandas>=2.0.3, <=2.2.2',
