@@ -45,7 +45,7 @@
 ## 2. 安装方法
 1. 如果您只想调用pricelib实现定价，在您的终端中使用命令`pip install pricelib`即可将pricelib安装到Python解释器的`Lib/site-packages`中。
 
-2. 如果您是开发者并且想要在本地安装这个Python库，您需要在Gitee网页下载项目的源码，然后在项目的根目录下，用终端运行`pip install -e .`命令，这个目录应该包含`setup.py`文件。这个命令将以"editable"模式安装这个库，这意味着您对源代码的任何修改都会立即反映到您的环境中，无需重新安装。
+2. 如果您是开发者并且想要在本地安装这个Python库，您需要在https://gitee.com/lltech/pricelib下载项目的源码，然后在项目的根目录下，用终端运行`pip install -e .`命令，这个目录应该包含`setup.py`文件。这个命令将以"editable"模式安装这个库，这意味着您对源代码的任何修改都会立即反映到您的环境中，无需重新安装。
 
 3. 如果您还想安装绘图依赖项和开发依赖项（在`setup.py`文件的`extras_require`中定义，绘图依赖项包括`matplotlib`和`plotly`，开发依赖项包括静态分析工具`flake8`、`pylint`和测试工具`pytest`），您应该在终端中使用`pip install -e .[dev,plot]`命令， 这将安装pricelib库、绘图依赖项和开发依赖项。   
 如果您只想安装pricelib库和开发依赖项，则您应该使用`pip install -e .[dev]`命令。
@@ -188,7 +188,7 @@ price_mc = option.price()
 option.set_pricing_engine(pde_engine)
 price_pde = option.price()
 ```
-调用期权产品的price()方法，即可实现定价。各个衍生品结构的不同定价方法的使用示例，详见examples。
+调用期权产品的price()方法，即可实现定价。各个衍生品结构的不同定价方法的使用示例，详见https://gitee.com/lltech/pricelib的examples。
 
 定价引擎支持的波动率模型具体如下:
 
@@ -329,8 +329,7 @@ pricelib作为一个定价库，没有界面，不太直观，因此在推出开
 
 ![敏感性分析](./docs/pyRisk_3.png)
 
-pyRisk的定位是个小巧的辅助工具，主要目的只是为了展示应用pricelib的经典场景。您可以通过凌瓴科技的主页下载绿色免安装的pyRisk.exe:
-https://www.galatech.com.cn/download/pyRisk
+pyRisk的定位是个小巧的辅助工具，主要目的只是为了展示应用pricelib的经典场景。如果您想试用pyRisk，可以联系我们免费获取。
 
 ## 5. 项目结构
 
