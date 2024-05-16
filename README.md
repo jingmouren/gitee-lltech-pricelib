@@ -24,7 +24,7 @@
 | **6 累计期权**   | 标准累购，标准累沽，区间累计                  | 蒙特卡洛模拟                                                           |
 >注：二元期权和障碍期权的解析解，都可以选择Broadie Glasserman Kou(1995)离散观察修正，既支持连续观察，也支持离散观察。
 
-具体的产品及其参数的介绍，在场外百科微信小程序中，已经整理成了结构百科，可以方便地查阅。
+具体的产品及其参数的介绍，在场外百科全书微信小程序中，已经整理成了结构百科，可以方便地查阅。
 <div align=center>
 <img src="./docs/otc_wiki_0.png" alt="场外百科全书-微信小程序" height="150">
 <br>
@@ -45,7 +45,7 @@
 ## 2. 安装方法
 1. 如果您只想调用pricelib实现定价，在您的终端中使用命令`pip install pricelib`即可将pricelib安装到Python解释器的`Lib/site-packages`中。
 
-2. 如果您是开发者并且想要在本地安装这个Python库，您需要在https://gitee.com/lltech/pricelib下载项目的源码，然后在项目的根目录下，用终端运行`pip install -e .`命令，这个目录应该包含`setup.py`文件。这个命令将以"editable"模式安装这个库，这意味着您对源代码的任何修改都会立即反映到您的环境中，无需重新安装。
+2. 如果您是开发者并且想要在本地安装这个Python库，您需要在 https://gitee.com/lltech/pricelib 下载项目的源码，然后在项目的根目录下，用终端运行`pip install -e .`命令，这个目录应该包含`setup.py`文件。这个命令将以"editable"模式安装这个库，这意味着您对源代码的任何修改都会立即反映到您的环境中，无需重新安装。
 
 3. 如果您还想安装绘图依赖项和开发依赖项（在`setup.py`文件的`extras_require`中定义，绘图依赖项包括`matplotlib`和`plotly`，开发依赖项包括静态分析工具`flake8`、`pylint`和测试工具`pytest`），您应该在终端中使用`pip install -e .[dev,plot]`命令， 这将安装pricelib库、绘图依赖项和开发依赖项。   
 如果您只想安装pricelib库和开发依赖项，则您应该使用`pip install -e .[dev]`命令。
@@ -77,9 +77,10 @@ print(option.price())
 
 ```python
 from pricelib import *
-pde_engine = FdmSnowBallEngine(s=100, r=0.02, q=0.01, vol=0.16, s_step=200, n_smax=2)
-option = StandardSnowball(maturity=1, lock_term=3, s0=100, barrier_out=103, barrier_in=80,
-                          coupon_out=0.10, engine=pde_engine)
+pde_engine = FdmSnowBallEngine(s=100, r=0.02, q=0.01, vol=0.16, 
+                               s_step=200, n_smax=2)
+option = StandardSnowball(maturity=1, lock_term=3, s0=100, barrier_out=103,
+                          barrier_in=80, coupon_out=0.10, engine=pde_engine)
 print(option.price())  
 ```
 这里的`s0=100, barrier_out=103, barrier_in=80`的价格是百分比形式，您也可以输入价格的绝对值，例如`s0=5535.40, barrier_out=5701.46, barrier_in=4428.32`，只要所有价格参数保持一致即可。
@@ -142,7 +143,8 @@ volval = loc_vol_df.values
 # q期限结构
 dividend = RateTermStructure.from_array(div['maturity'].values, div['q'].values)
 # 局部波动率
-volatility = LocalVolSurface(expirations=expirations, strikes=strikes, volval=volval)
+volatility = LocalVolSurface(expirations=expirations, strikes=strikes,
+                             volval=volval)
 ```
 然后，实例化一个随机过程，可以选择广义BSM过程或Heston过程，其属性包括上述spot、r、q、vol等估值参数。  
 随机过程是Observer观察者，在估值参数改变时会收到通知。  
@@ -157,8 +159,9 @@ volatility = LocalVolSurface(expirations=expirations, strikes=strikes, volval=vo
 process = GeneralizedBSMProcess(spot=spot_price, interest=riskfree,
                                 div=dividend, vol=volatility)
 # Heston动态过程
-process = HestonProcess(spot=spot_price, interest=riskfree, div=dividend, v0=0.025,
-                        var_theta=0.02, var_kappa=4.01, var_vol=0.1, var_rho=-0.3)
+process = HestonProcess(spot=spot_price, interest=riskfree, div=dividend, 
+                        v0=0.025, var_theta=0.02, var_kappa=4.01,
+                        var_vol=0.1, var_rho=-0.3)
 ```
 接着，实例化一个定价引擎，定价引擎可以选择解析解、蒙特卡洛模拟、PDE有限差分法、数值积分法、树方法，  
 其属性包含一个随机过程，以及定价方法参数，例如：
@@ -169,8 +172,9 @@ process = HestonProcess(spot=spot_price, interest=riskfree, div=dividend, v0=0.0
 ```python
 # 3. 定价引擎
 an_engine = AnalyticVanillaEuEngine(process)
-mc_engine = MCVanillaEngine(process, n_path=100000, rands_method=RandsMethod.LowDiscrepancy,
-                            antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0)
+mc_engine = MCVanillaEngine(process, n_path=100000, seed=0,
+                            rands_method=RandsMethod.LowDiscrepancy,
+                            antithetic_variate=True, ld_method=LdMethod.Sobol) 
 quad_engine = QuadVanillaEngine(process, quad_method=QuadMethod.Simpson,
                                 n_points=801, n_max=4)
 bitree_engine = BiTreeVanillaEngine(process, tree_branches=500)
@@ -188,7 +192,7 @@ price_mc = option.price()
 option.set_pricing_engine(pde_engine)
 price_pde = option.price()
 ```
-调用期权产品的price()方法，即可实现定价。各个衍生品结构的不同定价方法的使用示例，详见https://gitee.com/lltech/pricelib的examples。
+调用期权产品的price()方法，即可实现定价。各个衍生品结构的不同定价方法的使用示例，详见 https://gitee.com/lltech/pricelib 的 examples。
 
 定价引擎支持的波动率模型具体如下:
 
@@ -223,8 +227,10 @@ print(option.price())
 在仅输入`maturity = 1`年时，实际上将起始日期设置为了估值日期，结束日期设置为了估值日期延后1年。  
 如果您需要更精细地处理交易日历和年化系数，可以在产品对象中设置相关参数：
 ```python
-option = VanillaOption(strike=100, callput=Callput.Call, exercise_type=ExerciseType.European,
-                       start_date=start_date, end_date=end_date, trade_calendar=CN_CALENDAR, 
+option = VanillaOption(strike=100, callput=Callput.Call, 
+                       exercise_type=ExerciseType.European,
+                       start_date=start_date, end_date=end_date, 
+                       trade_calendar=CN_CALENDAR, 
                        annual_days=annual_days, t_step_per_year=t_step_per_year)
 set_evaluation_date(datetime.date(2022, 1, 5))
 ```
@@ -237,8 +243,8 @@ set_evaluation_date(datetime.date(2022, 1, 5))
 正如前面举过的例子，您可以不输入敲出观察日，仅输入存续期`maturity = 1`年和锁定期`lock_term = 3`个月，  
 此时产品对象会自动生成一个根据交易日历调整后的敲出观察日期序列：
 ```python
-option = StandardSnowball(maturity=1, lock_term=3, s0=100, barrier_out=103, barrier_in=80,
-                          coupon_out=0.10, coupon_div=0.05)
+option = StandardSnowball(maturity=1, lock_term=3, s0=100, barrier_out=103,
+                          barrier_in=80, coupon_out=0.10, coupon_div=0.05)
 ```
 这是一个"敲出票息10%，红利票息5%的1年期锁三103-80平敲雪球"，由于敲出观察日缺省，在定价过程中，程序会自动生成如下的敲出观察日序列（假设估值日期设为2022年1月5日）：
 ```
@@ -254,11 +260,10 @@ end_date = date(2023, 1, 5)
 obs_dates = [date(2022, 4, 6), date(2022, 5, 5), date(2022, 6, 6), date(2022, 7, 5),
              date(2022, 8, 5), date(2022, 9, 5),date(2022, 10, 10), date(2022, 11, 7),
              date(2022, 12, 5), date(2023, 1, 5)]
-
-option = StandardSnowball(start_date=start_date, end_date=end_date, obs_dates=obs_dates,
-                          lock_term=3, s0=100, barrier_out=103, barrier_in=80,
+option = StandardSnowball(start_date=start_date, end_date=end_date, 
+                          obs_dates=obs_dates, lock_term=3, s0=100,
+                          barrier_out=103, barrier_in=80,
                           coupon_out=0.10, coupon_div=0.05)
-
 set_evaluation_date(date(2022, 1, 5))
 print(option.price())
 ```
