@@ -26,11 +26,11 @@
 
 具体的产品及其参数的介绍，在场外百科微信小程序中，已经整理成了结构百科，可以方便地查阅。
 <div style="text-align:center;">
-<img src="./docs/otc_wiki_0.png" alt="场外百科全书-微信小程序" style="width:auto;height:140px;">
+<img src="./docs/otc_wiki_0.png" alt="场外百科全书-微信小程序" height="150">
 <br>
-<img src="./docs/otc_wiki_1.png" alt="场外百科全书-结构列表" style="width:auto;height:450px;">
-<img src="./docs/otc_wiki_2.png" alt="场外百科全书-结构介绍" style="width:auto;height:450px;">
-<img src="./docs/otc_wiki_3.png" alt="场外百科全书-情景分析图" style="width:auto;height:450px;">
+<img src="./docs/otc_wiki_1.png" alt="场外百科全书-结构列表" height="300">
+<img src="./docs/otc_wiki_2.png" alt="场外百科全书-结构介绍" height="300">
+<img src="./docs/otc_wiki_3.png" alt="场外百科全书-情景分析图" height="300">
 </div>
 
 我们会持续关注市场上的最新动态，迅速地在priceLib中更新流行产品的定价模型。如果您有特别的产品定价需求，也可以与我们联系，我们通常可以在两至三天更新至priceLib中。您可以通过gitee社区与我们互动，或通过下方电话、邮件联系我们，也欢迎大家扫描下方二维码关注凌瓴科技微信公众号。
@@ -39,7 +39,7 @@
 - 邮箱：marx@galatech.com.cn
 - 微信公众号：凌瓴科技
 <div style="text-align:center;">
-<img src="./docs/official_accounts.jpg" alt="微信公众号" style="width:auto;height:150px;">
+<img src="./docs/official_accounts.jpg" alt="微信公众号" height="150">
 </div>
 
 ## 2. 安装方法
