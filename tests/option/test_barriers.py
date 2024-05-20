@@ -10,9 +10,9 @@ from examples.barrier import airbag_demo, barrier_option_demo, double_barrier_op
 
 
 def test_airbag_demo():
-    expected_discrete = [['安全气囊', 1.7896829727130363, 1.8028831469331283, 1.8039240725046461]]
+    expected_discrete = [['安全气囊', 1.7896829727130363, 1.8028831469331283, 1.7908106935325485]]
 
-    expected_continuous = [['安全气囊', 1.6143977879423792, 1.610585848277799]]
+    expected_continuous = [['安全气囊', 1.6143977879423792, 1.6104801711634669]]
 
     expected_discrete_df = pd.DataFrame(expected_discrete,
                                         columns=['安全气囊', '闭式解(每日观察)', 'MonteCarlo', 'PDE'])

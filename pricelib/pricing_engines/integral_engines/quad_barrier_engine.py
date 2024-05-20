@@ -6,14 +6,15 @@ Licensed under the Apache License, Version 2.0
 """
 from functools import lru_cache
 import numpy as np
-from pricelib.common.utilities.enums import UpDown, InOut
+from pricelib.common.utilities.enums import UpDown, InOut, PaymentType
 from pricelib.common.utilities.patterns import HashableArray
 from pricelib.common.time import global_evaluation_date
 from pricelib.common.pricing_engine_base import QuadEngine
 
 
 class QuadBarrierEngine(QuadEngine):
-    """障碍期权数值积分定价引擎"""
+    """障碍期权数值积分定价引擎
+    只支持离散观察(默认为每日观察)；敲入现金返还为到期支付；敲出现金返还支持 立即支付/到期支付"""
 
     @lru_cache(maxsize=1)
     def set_quad_price_range(self, s_sliced, barrier, updown):
@@ -106,7 +107,10 @@ class QuadBarrierEngine(QuadEngine):
                 v_grid[an_range, step] -= self.Vmb(x, prod.strike, prod.callput.value, dt * (
                         self.backward_steps - step)) * prod.strike * prod.callput.value * prod.parti
             elif prod.inout == InOut.Out:
-                v_grid[an_range, step] = prod.rebate * np.exp(-r * dt * (self.backward_steps - step))
+                if prod.payment_type == PaymentType.Expire:  # 到期支付现金补偿
+                    v_grid[an_range, step] = prod.rebate * np.exp(-r * dt * (self.backward_steps - step))
+                else:  # 立即支付现金补偿
+                    v_grid[an_range, step] = prod.rebate
             else:
                 raise ValueError("inout must be In or Out")
         y = s_vec[:, 1]

@@ -15,10 +15,11 @@ from pricelib.common.time import global_evaluation_date
 
 class FdmBarrierEngine(FdmEngine):
     """障碍期权PDE有限差分法定价引擎
-    支持连续观察、均匀离散观察"""
+    只支持美式观察(整个有效期观察是否触碰)；支持连续观察、均匀离散观察(默认为每日观察)；
+    敲入现金返还为到期支付；敲出现金返还支持 立即支付/到期支付"""
     engine_type = EngineType.PdeEngine
 
-    def __init__(self, stoch_process=None, s_step=400, n_smax=4, fdm_theta=1, *,
+    def __init__(self, stoch_process=None, s_step=800, n_smax=2, fdm_theta=1, *,
                  s=None, r=None, q=None, vol=None):
         """初始化有限差分法定价引擎
         Args:
@@ -62,7 +63,7 @@ class FdmBarrierEngine(FdmEngine):
         if self.prod.callput == CallPut.Call:
             self.fn_callput = [lambda u: 0, lambda u: (smax * self.process.div.disc_factor(maturity, u) -
                                                        self.prod.strike * self.process.interest.disc_factor(maturity,
-                                                                                                u)) * self.prod.parti]
+                                                                                                            u)) * self.prod.parti]
         else:
             self.fn_callput = [lambda u: self.prod.strike * self.process.interest.disc_factor(maturity, u)
                                          * self.prod.parti, lambda u: 0]
@@ -79,9 +80,9 @@ class FdmBarrierEngine(FdmEngine):
                     self.fn_bound.append(lambda u: self.rebate[0] * self.process.interest.disc_factor(maturity, u))
             else:  # 这里只设置敲出期权的边界条件，因为敲入期权的边界条件是由已敲入的期权价值覆盖的
                 if self.prod.inout == InOut.Out:
-                    if self.prod.payment_type == PaymentType.Hit:  # 触碰障碍立即支付
+                    if self.prod.payment_type == PaymentType.Hit:  # 触碰障碍, 立即支付现金补偿
                         self.fn_bound.append(lambda u: r)
-                    else:  # 'PaymentMethod.Expire' 触碰障碍后，到期时支付
+                    else:  # 'PaymentMethod.Expire' 触碰障碍后，到期时支付现金补偿
                         self.fn_bound.append(lambda u: r * self.process.interest.disc_factor(maturity, u))
                 else:
                     self.fn_bound.append(self.fn_callput[i])
@@ -261,10 +262,10 @@ class FdmBarrierEngine(FdmEngine):
                 for j in range(t_step - 1, -1, -1):
                     yv = self.fd_not_in.evolve(j, yv, dt)  # 每组(p, q)更新。如果在障碍观察区间内，更新fd_bound；在观察区间外，更新fd_full
                     if j in obs_points:
-                        if prod.payment_type == PaymentType.Expire:  # 到期支付
+                        if prod.payment_type == PaymentType.Expire:  # 到期支付现金补偿
                             yv[self.lower] = self.fn_bound[0](j / t_step * maturity)
                             yv[self.upper] = self.fn_bound[1](j / t_step * maturity)
-                        else:  # 立即支付
+                        else:  # 立即支付现金补偿
                             yv[self.lower] = self.fn_bound[0](maturity)
                             yv[self.upper] = self.fn_bound[1](maturity)
                     self.fd_not_in.v_grid[1:-1, j] = yv
@@ -379,7 +380,8 @@ class FdmBarrierEngine(FdmEngine):
             t: int，期权价值矩阵的列(时间)的索引
             spot: float，价格的绝对值
             status: StatusType，期权是否已敲入
-        Returns: pv, delta, gamma, vega, theta, rho
+        Returns:
+            Dict[str:float]: {'pv': pv, 'delta': delta, 'gamma': gamma, 'theta': theta, 'vega': vega, 'rho': rho}
         """
         spot = self.process.spot() if spot is None else spot
         status = self.prod.status if status is None else status
@@ -415,7 +417,7 @@ class FdmBarrierEngine(FdmEngine):
             self.fd_knockin.v_grid = last_in_grid
         self.fd_not_in.v_grid = last_not_grid
 
-        return pv, delta, gamma, vega, theta, rho
+        return {'pv': pv, 'delta': delta, 'gamma': gamma, 'vega': vega, 'theta': theta, 'rho': rho}
 
     def value_matrix(self, status: StatusType = None):
         """根据是否敲入状态，返回S-t矩阵

@@ -11,7 +11,15 @@ import pandas as pd
 from pricelib import *
 
 
+def lite():
+    """简易定价接口"""
+    option = VanillaOption(callput=CallPut.Call, exercise_type=ExerciseType.American, strike=100, maturity=0.25,
+                           s=100, r=0.02, q=0.05, vol=0.16)
+    return option.pv_and_greeks()
+
+
 def run():
+    """自行配置定价引擎 """
     # 1. 市场数据，包括标的物价格、无风险利率、分红率、波动率
     spot_price = SimpleQuote(value=100, name="中证1000指数")
     riskfree = ConstantRate(value=0.02, name="无风险利率")
@@ -31,12 +39,11 @@ def run():
     pde_engine = FdmVanillaEngine(process, s_step=400, n_smax=4, fdm_theta=0.5)
 
     # 4. 定义产品：香草期权，包括欧式、美式
-    t_step_per_year = 243
     results = []
     for exercise_type in [ExerciseType.European, ExerciseType.American]:
         for callput in CallPut:
             option = VanillaOption(callput=callput, exercise_type=exercise_type, strike=100, maturity=0.25,
-                                   t_step_per_year=t_step_per_year)
+                                   t_step_per_year=243)
             # 5.为产品设置定价引擎
             if exercise_type == ExerciseType.European:
                 option.set_pricing_engine(an_Eu_engine)
@@ -68,3 +75,4 @@ def run():
 if __name__ == '__main__':
     res = run()
     print(res)
+    print(lite())

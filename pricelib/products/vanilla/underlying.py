@@ -10,12 +10,12 @@ from pricelib.common.product_base.option_base import OptionBase
 
 class UnderlyingAsset(OptionBase):
     """标的资产"""
+
     def __init__(self, s0, *, engine=None):
         super().__init__()
         self.s0 = s0
         if engine is not None:
             self.set_pricing_engine(engine)
-
 
     def set_pricing_engine(self, engine):
         self.engine = engine

@@ -14,7 +14,16 @@ import numpy as np
 from pricelib import *
 
 
+def lite():
+    """简易定价接口"""
+    option = DoubleDigitalOption(maturity=1, bound=(80, 120), rebate=(10, 10), touch_type=TouchType.Touch,
+                                 exercise_type=ExerciseType.American, payment_type=PaymentType.Expire,
+                                 s=100, r=0.02, q=0.05, vol=0.2)
+    return option.pv_and_greeks()
+
+
 def run():
+    """自行配置定价引擎 """
     set_evaluation_date(datetime.date(2021, 1, 5))
     # 1. 市场数据，包括标的物价格、无风险利率、分红率、波动率
     spot_price = SimpleQuote(value=100, name="中证1000指数")
@@ -90,3 +99,4 @@ if __name__ == '__main__':
     dfa, dfb = run()
     print(dfa)
     print(dfb)
+    print(lite())

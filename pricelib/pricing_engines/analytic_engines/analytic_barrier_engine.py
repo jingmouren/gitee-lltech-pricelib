@@ -6,13 +6,15 @@ Licensed under the Apache License, Version 2.0
 """
 import numpy as np
 from scipy.stats import norm
-from pricelib.common.utilities.enums import UpDown, BarrierType
+from pricelib.common.utilities.enums import UpDown, BarrierType, PaymentType, InOut
 from pricelib.common.time import global_evaluation_date
 from pricelib.common.pricing_engine_base import AnalyticEngine
 
 
 class AnalyticBarrierEngine(AnalyticEngine):
     """障碍期权闭式解定价引擎
+    敲入期权现在支付期权费，但是当到期前资产价格触及障碍水平时，期权才生效。若一直没有发生敲入，则到期时支付现金返还rebate
+    敲出期权现在支付期权费，但是当到期前资产价格触及障碍水平时，期权就失效了。若到期前发生敲出事件，则立刻支付现金返还rebate
     Merton(1973), Reiner & Rubinstein(1991a)提出障碍期权解析解，
     Broadie, Glasserman和Kou(1995)提出均匀离散观察障碍期权近似解"""
 
@@ -25,6 +27,10 @@ class AnalyticBarrierEngine(AnalyticEngine):
             spot: float，估值日标的价格，如果是None，则使用随机过程的当前价格
         Returns: float，现值
         """
+        if prod.inout == InOut.In:
+            assert prod.payment_type == PaymentType.Expire, "ValueError: 敲入期权解析解，一直未敲入，到期时支付现金返还。payment_type应该是Expire"
+        if prod.inout == InOut.Out:
+            assert prod.payment_type == PaymentType.Hit, "ValueError: 敲出期权解析解，发生敲出，立刻支付现金返还。payment_type应该是Hit"
         calculate_date = global_evaluation_date() if t is None else t
         tau = prod.trade_calendar.business_days_between(calculate_date, prod.end_date) / prod.t_step_per_year
         if spot is None:

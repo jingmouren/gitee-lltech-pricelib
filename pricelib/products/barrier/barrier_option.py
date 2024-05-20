@@ -11,28 +11,35 @@ from pricelib.common.time import CN_CALENDAR, AnnualDays, global_evaluation_date
 from pricelib.common.utilities.patterns import Observer
 from pricelib.common.utilities.utility import time_this, logging
 from pricelib.common.product_base.option_base import OptionBase
+from pricelib.pricing_engines.analytic_engines import AnalyticBarrierEngine
 
 
 class BarrierOption(OptionBase, Observer):
     """单边障碍期权
-    默认为到期支付，仅PDE有限差分定价引擎支持立即支付"""
+    敲入期权在障碍被触及时才会生效，敲出期权在障碍被触及时立即失效"""
 
     def __init__(self, strike, barrier, rebate, callput: CallPut, inout: InOut, updown: UpDown, *, parti=1,
-                 payment_type=PaymentType.Expire, engine=None, status=StatusType.NoTouch, maturity=None,
+                 payment_type=None, engine=None, status=StatusType.NoTouch, maturity=None,
                  start_date=None, end_date=None, discrete_obs_interval=None, trade_calendar=CN_CALENDAR,
-                 annual_days=AnnualDays.N365, t_step_per_year=243):
+                 annual_days=AnnualDays.N365, t_step_per_year=243, s=None, r=None, q=None, vol=None):
         """构造函数
         产品参数:
             strike: float, 执行价
             barrier: float, 障碍价
-            rebate: float, 敲出补偿金额，或未敲入补偿金额，绝对数值，非年化
+            rebate: float, 敲出现金返还金额，或未敲入现金返还金额，绝对数值，非百分比，非年化
             callput: 看涨看跌类型，CallPut枚举类，Call/Put
             inout: 敲入敲出类型，InOut枚举类，In敲入/Out敲出
             updown: 向上向下类型，UpDown枚举类，Up/Down
-            payment_type: 支付类型，PaymentType枚举类，默认为到期支付Expire
+            payment_type: 现金返还支付类型，PaymentType枚举类，敲入默认为到期支付Expire；敲出默认为立即支付Hit
             parti: float, 香草期权的参与率，默认为1
-            engine: 定价引擎，PricingEngine类
-            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
+            status: 估值日前的敲入敲出状态，StatusType枚举类，默认为NoTouch
+            engine: 定价引擎，PricingEngine类，以下几种引擎均支持向上/向下、敲入/敲出、看涨/看跌8种单边障碍期权，支持敲出/未敲入现金返还
+                            解析解和PDE引擎支持离散观察/连续观察，其余引擎只支持离散观察(默认为每日观察)
+                    解析解: AnalyticBarrierEngine 敲入现金返还为到期支付；敲出现金返还为立即支付
+                    蒙特卡洛: MCBarrierEngine  敲入现金返还为到期支付；敲出现金返还为到期支付 todo: 敲出现金返还立即支付
+                    PDE: FdmBarrierEngine  敲入现金返还为到期支付；敲出现金返还 支持 立即支付/到期支付
+                    积分法: QuadBarrierEngine  敲入现金返还为到期支付；敲出现金返还 支持 立即支付/到期支付
+                    二叉树: BiTreeBarrierEngine 敲入现金返还为到期支付；敲出现金返还 支持 立即支付/到期支付
         时间参数: 要么输入年化期限，要么输入起始日和到期日
             maturity: float，年化期限
             start_date: datetime.date，起始日
@@ -41,6 +48,14 @@ class BarrierOption(OptionBase, Observer):
             annual_days: int，每年的自然日数量
             t_step_per_year: int，每年的交易日数量
             discrete_obs_interval: 观察时间间隔. 若为连续观察，None；若为均匀离散观察，为年化的观察时间间隔
+        可选参数:
+            若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
+            则默认使用解析解定价引擎 AnalyticBarrierEngine - Merton(1973), Reiner & Rubinstein(1991a)
+                                支持 Broadie, Glasserman和Kou(1995)均匀离散观察调整
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__()
         self.trade_calendar = trade_calendar
@@ -59,11 +74,22 @@ class BarrierOption(OptionBase, Observer):
         self._inout = inout
         self._updown = updown
         self.barrier_type = BarrierType.get_category(self._updown, self._inout, self._callput)
-        self.payment_type = payment_type
+        if payment_type is None:
+            if self._inout == InOut.In:
+                self.payment_type = PaymentType.Expire
+            else:
+                self.payment_type = PaymentType.Hit
+        else:
+            self.payment_type = payment_type
+            if self._inout == InOut.In:
+                assert payment_type == PaymentType.Expire, "ValueError: 敲入期权的现金返还方式PaymentType一定是到期支付Expire"
         self.discrete_obs_interval = discrete_obs_interval  # 连续观察=None；均匀离散观察=观察时间间隔
         self.status = status
         if engine is not None:
             self.set_pricing_engine(engine)
+        elif s is not None and r is not None and q is not None and vol is not None:
+            default_engine = AnalyticBarrierEngine(s=s, r=r, q=q, vol=vol)
+            self.set_pricing_engine(default_engine)
 
     def set_pricing_engine(self, engine):
         """设置定价引擎，同时将自己注册为观察者。若已有定价引擎，先将自己从原定价引擎的观察者列表中移除"""

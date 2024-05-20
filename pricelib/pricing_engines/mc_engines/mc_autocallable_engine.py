@@ -11,7 +11,8 @@ from pricelib.common.time import global_evaluation_date
 
 
 class MCAutoCallableEngine(McEngine):
-    """自动赎回结构(雪球类) Monte Carlo 模拟定价引擎"""
+    """自动赎回结构(雪球类) Monte Carlo 模拟定价引擎
+    支持变敲出、变敲入、变票息等要素可变型雪球结构"""
 
     def __init__(self, stoch_process=None, n_path=100000, rands_method=RandsMethod.LowDiscrepancy,
                  antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0, *,

@@ -7,7 +7,16 @@ Licensed under the Apache License, Version 2.0
 import datetime
 from pricelib import *
 
+
+def lite():
+    """简易定价接口"""
+    option = FlooredSnowball(maturity=2, lock_term=3, s0=100, barrier_out=100, barrier_in=75, coupon_out=0.089,
+                             strike_lower=75, margin_lvl=1, s=100, r=0.02, q=0.03, vol=0.15)
+    return option.pv_and_greeks()
+
+
 def run():
+    """自行配置定价引擎 """
     # 1. 市场数据，包括标的物价格、无风险利率、分红率、波动率
     # 设置全局估值日
     set_evaluation_date(datetime.date(2022, 1, 4))
@@ -35,8 +44,8 @@ def run():
 
     option.set_pricing_engine(pde_engine)
     price_pde = option.price()
-    pde_greeks = {"price_pde": price_pde, "delta": option.delta(), "gamma": option.gamma(), "theta": option.theta(),
-                  "vega": option.vega(), "rho": option.rho()}
+    pde_greeks = {"price_pde": price_pde, "delta": option.delta(), "gamma": option.gamma(), "vega": option.vega(),
+                  "theta": option.theta(), "rho": option.rho()}
 
     option.set_pricing_engine(quad_engine)
     price_quad = option.price()
@@ -50,3 +59,4 @@ if __name__ == '__main__':
     for k, v in res.items():
         print(f'{k}: {v}')
     print(greeks)
+    print(lite())

@@ -12,7 +12,7 @@ from scipy.interpolate import interp1d
 from ..processes import StochProcessBase
 from ..utilities.numerical import LinearFlat, CubicSplineFlat, TDMA_ldu_jit
 from ..utilities.patterns import HashableArray
-from ..utilities.enums import ProcessType, EngineType, StatusType
+from ..utilities.enums import ProcessType, EngineType
 from .engine_base import PricingEngineBase
 
 
@@ -21,7 +21,7 @@ class FdmEngine(PricingEngineBase, metaclass=ABCMeta):
     """障碍期权PDE有限差分法定价引擎，适用于连续观察障碍期权价值"""
     engine_type = EngineType.PdeEngine
 
-    def __init__(self, stoch_process: StochProcessBase = None, s_step=400, n_smax=4, fdm_theta=0.5, *,
+    def __init__(self, stoch_process: StochProcessBase = None, s_step=800, n_smax=2, fdm_theta=1, *,
                  s=None, r=None, q=None, vol=None):
         """初始化有限差分法定价引擎
         Args:
@@ -144,7 +144,8 @@ class FdmEngine(PricingEngineBase, metaclass=ABCMeta):
             prod: Product，产品对象
             t: int，期权价值矩阵的列(时间)的索引
             spot: float，价格的绝对值
-        Returns: pv, delta, gamma, vega, theta, rho
+        Returns:
+            Dict[str:float]: {'pv': pv, 'delta': delta, 'gamma': gamma, 'theta': theta, 'vega': vega, 'rho': rho}
         """
         spot = self.process.spot() if spot is None else spot
         s_step = spot * 0.01
@@ -175,7 +176,7 @@ class FdmEngine(PricingEngineBase, metaclass=ABCMeta):
 
         self.fdm.v_grid = last_v_grid
 
-        return pv, delta, gamma, vega, theta, rho
+        return {'pv': pv, 'delta': delta, 'gamma': gamma, 'vega': vega, 'theta': theta, 'rho': rho}
 
     def value_matrix(self):
         """返回S-t矩阵"""
@@ -228,7 +229,7 @@ class FdmEngine(PricingEngineBase, metaclass=ABCMeta):
                     gamma_s_t[i, j] = (f(spot + step) - 2 * f(spot) + f(spot - step)) / (step ** 2)
             return gamma_s_t, spots
 
-    def theta_matrix(self, step=0, status: StatusType = None):
+    def theta_matrix(self, step=0):
         """计算S-t矩阵中，每个s价格所有t时刻的theta'
             step: 时间步长，默认为0，即选择PDE有限差分网格的时间步长"""
         if step == 0:

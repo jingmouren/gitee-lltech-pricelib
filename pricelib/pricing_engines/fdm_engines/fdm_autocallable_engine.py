@@ -14,9 +14,9 @@ from pricelib.common.time import global_evaluation_date
 
 class FdmAutoCallableEngine(FdmEngine):
     """AutoCallable PDE有限差分法定价引擎基类
-        雪球/凤凰/FCN/DCN"""
+        雪球/凤凰/FCN/DCN, 支持变敲出、变敲入、变票息等要素可变型结构"""
 
-    def __init__(self, stoch_process=None, s_step=400, n_smax=4, fdm_theta=1, *,
+    def __init__(self, stoch_process=None, s_step=800, n_smax=2, fdm_theta=1, *,
                  s=None, r=None, q=None, vol=None):
         """初始化有限差分法定价引擎
         Args:
@@ -224,6 +224,9 @@ class FdmAutoCallableEngine(FdmEngine):
 
     # pylint: disable=too-many-locals
     def pv_and_greeks(self, prod, t=0, spot=None, status: StatusType = None):
+        """当一次性计算pv和5个greeks时，可以调用此函数
+        Returns:
+            Dict[str:float]: {'pv': pv, 'delta': delta, 'gamma': gamma, 'theta': theta, 'vega': vega, 'rho': rho}"""
         spot = self.process.spot() if spot is None else spot
         status = prod.status if status is None else status
         s_step = spot * 0.01
@@ -258,7 +261,7 @@ class FdmAutoCallableEngine(FdmEngine):
         self.fd_knockin.v_grid = last_in_grid
         self.fd_not_in.v_grid = last_not_grid
 
-        return pv, delta, gamma, vega, theta, rho
+        return {'pv': pv, 'delta': delta, 'gamma': gamma, 'vega': vega, 'theta': theta, 'rho': rho}
 
     def value_matrix(self, status: StatusType = None):
         """根据是否敲入状态，返回S-t矩阵"""

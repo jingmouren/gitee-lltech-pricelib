@@ -15,7 +15,16 @@ import numpy as np
 from pricelib import *
 
 
+def lite():
+    """简易定价接口"""
+    option = AsianOption(strike=100, maturity=1, callput=CallPut.Call, ave_method=AverageMethod.Geometric,
+                         substitute=AsianAveSubstitution.Underlying, enhanced=False, limited_price=None,
+                         s=100, r=0.02, q=0.05, vol=0.16)
+    return option.pv_and_greeks()
+
+
 def run():
+    """自行配置定价引擎 """
     # 1. 市场数据，包括标的物价格、无风险利率、分红率、波动率
     # 设置全局估值日
     set_evaluation_date(datetime.date(2023, 1, 5))
@@ -34,7 +43,6 @@ def run():
     bitree_engine = BiTreeAsianEngine(process, tree_branches=100, n_samples=200)
 
     # 4. 定义产品：亚式期权 - 算术平均/几何平均，增强亚式，替代标的资产价格
-    t_step_per_year = 243
     results = []
     for ave_method in AverageMethod:
         for callput in CallPut:
@@ -42,7 +50,7 @@ def run():
                 option = AsianOption(callput=callput, ave_method=ave_method, strike=100, maturity=1,
                                      substitute=AsianAveSubstitution.Underlying, enhanced=enhanced, limited_price=100,
                                      start_date=datetime.date(2023, 1, 5),
-                                     end_date=None, obs_start=None, obs_end=None, t_step_per_year=t_step_per_year)
+                                     end_date=None, obs_start=None, obs_end=None, t_step_per_year=243)
                 # 5.为产品设置定价引擎
                 if not enhanced:
                     option.set_pricing_engine(an_engine)
@@ -68,3 +76,4 @@ def run():
 if __name__ == '__main__':
     res_df = run()
     print(res_df)
+    print(lite())

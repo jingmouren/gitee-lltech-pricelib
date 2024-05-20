@@ -11,7 +11,8 @@ from pricelib.common.pricing_engine_base import McEngine
 
 
 class MCBarrierEngine(McEngine):
-    """障碍期权 Monte Carlo 模拟定价引擎"""
+    """障碍期权 Monte Carlo 模拟定价引擎
+    只支持离散观察(默认为每日观察)；敲入现金返还为到期支付；敲出现金返还为到期支付"""
 
     def calc_present_value(self, prod, t=None, spot=None):
         """计算现值
@@ -55,10 +56,13 @@ class MCBarrierEngine(McEngine):
             payoff = np.ones(paths[-1].size) * prod.rebate
             payoff[knock_inout] = np.maximum(prod.callput.value * (paths[-1, knock_inout] - prod.strike),
                                              0) * prod.parti
+            price = np.mean(payoff) * np.exp(- r * _maturity)
+            return price
         elif prod.inout == InOut.Out:
+            # todo: 敲出期权的现金补偿目前是到期支付，添加敲出时立即支付
             payoff = np.maximum(prod.callput.value * (paths[-1] - prod.strike), 0) * prod.parti
             payoff[knock_inout] = prod.rebate
+            price = np.mean(payoff) * np.exp(- r * _maturity)
+            return price
         else:
             raise ValueError("不支持的InOut类型")
-        price = np.mean(payoff) * np.exp(- r * _maturity)
-        return price

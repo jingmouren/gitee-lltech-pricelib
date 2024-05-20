@@ -11,7 +11,9 @@ from pricelib.common.time import global_evaluation_date
 
 class MCAirbagEngine(McEngine):
     """安全气囊 Monte Carlo 模拟定价引擎
-    安全气囊是美式观察向下敲入期权，到期支付"""
+    安全气囊是美式观察向下敲入期权，到期支付
+    只支持离散观察(默认为每日观察)
+    """
 
     def calc_present_value(self, prod, t=None, spot=None):
         """计算现值

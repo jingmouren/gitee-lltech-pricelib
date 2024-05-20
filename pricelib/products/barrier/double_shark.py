@@ -11,6 +11,7 @@ from pricelib.common.time import CN_CALENDAR, AnnualDays, global_evaluation_date
 from pricelib.common.utilities.patterns import Observer
 from pricelib.common.utilities.utility import time_this, logging
 from pricelib.common.product_base.option_base import OptionBase
+from pricelib.pricing_engines.fdm_engines import FdmDoubleSharkEngine
 
 
 class DoubleShark(OptionBase, Observer):
@@ -21,7 +22,8 @@ class DoubleShark(OptionBase, Observer):
     def __init__(self, exercise_type=ExerciseType.American, payment_type=PaymentType.Expire, strike=(90, 110),
                  bound=(80, 120), rebate=(0, 0), parti=(1, 1), engine=None, status=StatusType.NoTouch,
                  maturity=None, start_date=None, end_date=None, window=(None, None), discrete_obs_interval=None,
-                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243):
+                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
         """构造函数
         产品参数:
             exercise_type: 障碍观察类型，ExerciseType枚举类，美式观察American/欧式到期观察European
@@ -32,8 +34,16 @@ class DoubleShark(OptionBase, Observer):
                                                   对敲出期权，元组第一位是低障碍价下方的补偿，第二位是高障碍价上方的补偿，
                                                   对敲入期权，元组第一位是敲入补偿，第二位没有用处。
             parti: (put_parti, call_parti), 香草期权的参与率，默认为1
-            engine: 定价引擎，PricingEngine类
             status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
+            engine: 定价引擎，PricingEngine类
+                    解析解: AnalyticDoubleSharkEngine 分为两种，只支持美式观察(整个有效期观察)；支持连续观察/离散观察(默认为每日观察)；
+                                                    Ikeda and Kunitomo(1992) 仅当行权价在障碍范围内时，公式才是成立的
+                                                    Haug(1998) 仅适用于标的持有成本为0的期权(期货期权)
+                                    两者的现金返还部分都使用美式双接触闭式解Hui(1996)，因此高低敲出现金返还也必须相等，现金返还到期支付
+                    PDE: FdmDoubleSharkEngine  只支持美式观察(整个有效期观察)；支持连续观察/离散观察(默认为每日观察)；
+                                           支持现金返还；敲入现金返还为到期支付；敲出现金返还支持 立即支付/到期支付
+                    蒙特卡洛: MCDoubleSharkEngine  支持欧式观察(仅到期观察)/美式观察(整个有效期观察)；只支持离散观察(默认为每日观察)；
+                                            支持现金返还；敲入现金返还为到期支付；敲出现金返还支持 立即支付/到期支付
         时间参数: 要么输入年化期限，要么输入起始日和到期日
             maturity: float，年化期限
             start_date: datetime.date，起始日
@@ -44,6 +54,13 @@ class DoubleShark(OptionBase, Observer):
             trade_calendar: 交易日历，Calendar类，默认为中国内地交易日历
             annual_days: int，每年的自然日数量
             t_step_per_year: int，每年的交易日数量
+        可选参数:
+            若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
+            则默认使用PDE定价引擎 FdmDoubleSharkEngine
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__()
         self.trade_calendar = trade_calendar
@@ -65,7 +82,9 @@ class DoubleShark(OptionBase, Observer):
         self.status = status
         if engine is not None:
             self.set_pricing_engine(engine)
-
+        elif s is not None and r is not None and q is not None and vol is not None:
+            default_engine = FdmDoubleSharkEngine(s=s, r=r, q=q, vol=vol)
+            self.set_pricing_engine(default_engine)
 
     def set_pricing_engine(self, engine):
         """设置定价引擎，同时将自己注册为观察者。若已有定价引擎，先将自己从原定价引擎的观察者列表中移除"""

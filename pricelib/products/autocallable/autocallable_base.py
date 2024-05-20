@@ -13,6 +13,7 @@ from pricelib.common.time import (global_evaluation_date, Schedule, CN_CALENDAR,
 from pricelib.common.utilities.patterns import Observer
 from pricelib.common.utilities.utility import time_this, logging
 from pricelib.common.product_base.option_base import OptionBase
+from pricelib.pricing_engines.fdm_engines import FdmSnowBallEngine, FdmPhoenixEngine
 
 
 class AutocallableBase(OptionBase, Observer):
@@ -26,7 +27,8 @@ class AutocallableBase(OptionBase, Observer):
                  parti_in=1, margin_lvl=1, strike_upper=None, strike_lower=0, strike_call=None, obs_dates=None,
                  pay_dates=None, lock_term=1, trigger=False, in_obs_type=ExerciseType.American,
                  status=StatusType.NoTouch, engine=None, maturity=None, start_date=None, end_date=None,
-                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243):
+                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
         """构造函数
         产品参数:
             s0: float，标的初始价格
@@ -47,9 +49,12 @@ class AutocallableBase(OptionBase, Observer):
             strike_call: float，敲出价之上的看涨结构行权价
             lock_term: int，锁定期，单位为月，锁定期内不触发敲出
             trigger: bool，是否为触发器，即敲出票息是否年化，True为绝对值，False为百分比
-            engine: 定价引擎，PricingEngine类
-            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
             in_obs_type: 敲入观察类型，ExerciseType枚举类，默认为American每日观察；European为仅到期日观察是否敲入
+            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
+            engine: 定价引擎，PricingEngine类
+                    蒙特卡洛: MCAutoCallableEngine
+                    PDE: FdmSnowBallEngine
+                    积分法: QuadSnowballEngine
         时间参数: 要么输入年化期限，要么输入起始日和到期日；敲出观察日和票息支付日可缺省
             maturity: float，年化期限
             start_date: datetime.date，起始日
@@ -59,6 +64,13 @@ class AutocallableBase(OptionBase, Observer):
             trade_calendar: 交易日历，Calendar类，默认为中国内地交易日历
             annual_days: int，每年的自然日数量
             t_step_per_year: int，每年的交易日数量
+        可选参数:
+            若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
+            则默认使用PDE定价引擎 FdmSnowBallEngine
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__()
         self.s0 = s0  # 标的初始价格
@@ -95,10 +107,13 @@ class AutocallableBase(OptionBase, Observer):
             self.pay_dates = Schedule(trade_calendar=trade_calendar, date_schedule=pay_dates)
         self.lock_term = lock_term  # 锁定期
         self.trigger = trigger  # 是否是触发式
-        if engine is not None:
-            self.set_pricing_engine(engine)
         self.status = status
         self.in_obs_type = in_obs_type  # 敲入观察为欧式，到期观察敲入；美式，每日观察敲入
+        if engine is not None:
+            self.set_pricing_engine(engine)
+        elif s is not None and r is not None and q is not None and vol is not None:
+            default_engine = FdmSnowBallEngine(s=s, r=r, q=q, vol=vol)
+            self.set_pricing_engine(default_engine)
 
     def set_pricing_engine(self, engine):
         """设置定价引擎，同时将自己注册为观察者。若已有定价引擎，先将自己从原定价引擎的观察者列表中移除"""
@@ -163,7 +178,7 @@ class PhoenixBase(OptionBase, Observer):
                  strike_upper=None, strike_lower=0, obs_dates=None, pay_dates=None, lock_term=1,
                  in_obs_type=ExerciseType.American, status=StatusType.NoTouch, engine=None, maturity=None,
                  start_date=None, end_date=None, trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365,
-                 t_step_per_year=243):
+                 t_step_per_year=243, s=None, r=None, q=None, vol=None):
         """构造函数
         Args:
             s0: float，标的初始价格
@@ -181,9 +196,12 @@ class PhoenixBase(OptionBase, Observer):
             strike_upper: float，敲入发生后(熊市价差)的高行权价，即OTM行权价(<s0)，普通凤凰敲入发生后的高行权价为期初价格s0
             strike_lower: float，敲入发生后(熊市价差)的低行权价，即保底边界，越高提供的保护越多，值为0时不保底
             lock_term: int，锁定期，单位为月，锁定期内不触发敲出
-            engine: 定价引擎，PricingEngine类
             status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
             in_obs_type: 敲入观察类型，ExerciseType枚举类，默认为American每日观察；European为仅到期日观察是否敲入
+            engine: 定价引擎，PricingEngine类
+                    蒙特卡洛: MCPhoenixEngine
+                    PDE: FdmPhoenixEngine
+                    积分法: QuadFCNEngine
         时间参数: 要么输入年化期限，要么输入起始日和到期日；敲出观察日和票息支付日可缺省
             maturity: float，年化期限
             start_date: datetime.date，起始日
@@ -193,6 +211,13 @@ class PhoenixBase(OptionBase, Observer):
             trade_calendar: 交易日历，Calendar类，默认为中国内地交易日历
             annual_days: int，每年的自然日数量
             t_step_per_year: int，每年的交易日数量
+        可选参数:
+            若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
+            则默认使用PDE定价引擎 FdmSnowBallEngine
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__()
         self.s0 = s0  # 标的初始价格
@@ -235,10 +260,13 @@ class PhoenixBase(OptionBase, Observer):
         self.margin_lvl = margin_lvl  # 预付金比例
         self.strike_upper = s0 if strike_upper is None else strike_upper  # 敲入后高执行价
         self.strike_lower = strike_lower  # 低行权价
-        if engine is not None:
-            self.set_pricing_engine(engine)
         self.status = status
         self.in_obs_type = in_obs_type  # 敲入观察为欧式，到期观察敲入；美式，每日观察敲入
+        if engine is not None:
+            self.set_pricing_engine(engine)
+        elif s is not None and r is not None and q is not None and vol is not None:
+            default_engine = FdmPhoenixEngine(s=s, r=r, q=q, vol=vol)
+            self.set_pricing_engine(default_engine)
 
     def set_pricing_engine(self, engine):
         with suppress(AttributeError, ValueError):

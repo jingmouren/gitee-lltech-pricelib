@@ -67,7 +67,8 @@ class QuadEngine(PricingEngineBase, metaclass=ABCMeta):
     """数值积分法定价引擎，目前只支持常数r、q、vol"""
     engine_type = EngineType.QuadEngine
 
-    def __init__(self, stoch_process: StochProcessBase = None, quad_method=QuadMethod.Simpson, n_points=801, n_max=4, *,
+    def __init__(self, stoch_process: StochProcessBase = None, quad_method=QuadMethod.Simpson, n_points=1001, n_max=4,
+                 *,
                  s=None, r=None, q=None, vol=None):
         """初始化数值积分法定价引擎
         Args:

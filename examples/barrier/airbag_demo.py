@@ -9,7 +9,15 @@ import pandas as pd
 from pricelib import *
 
 
+def lite():
+    """简易定价接口"""
+    option = Airbag(maturity=1, strike=100, barrier=70, knockin_parti=1., call_parti=0.7, reset_call_parti=1.,
+                    s=100, r=0.03, q=0.05, vol=0.2)
+    return option.pv_and_greeks()
+
+
 def run():
+    """自行配置定价引擎 """
     pd.set_option('display.max_columns', None)
     # 1. 市场数据，包括标的物价格、无风险利率、分红率、波动率
     # 设置全局估值日
@@ -26,7 +34,7 @@ def run():
     an_engine = AnalyticAirbagEngine(process)
     mc_engine = MCAirbagEngine(process, n_path=100000, rands_method=RandsMethod.LowDiscrepancy,
                                antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0)
-    pde_engine = FdmAirbagEngine(process, s_step=5000, n_smax=2, fdm_theta=1)
+    pde_engine = FdmAirbagEngine(process, s_step=1600, n_smax=2, fdm_theta=1)
 
     # 4. 定义产品：安全气囊
     t_step_per_year = 243
@@ -74,3 +82,4 @@ if __name__ == '__main__':
     dfa, dfb = run()
     print(dfa)
     print(dfb)
+    print(lite())

@@ -9,6 +9,7 @@ import numpy as np
 from pricelib.common.utilities.enums import StatusType
 from pricelib.common.time import Schedule, CN_CALENDAR, AnnualDays
 from pricelib.common.utilities.utility import time_this
+from pricelib.pricing_engines.mc_engines import MCParisSnowballEngine
 from .autocallable_base import AutocallableBase
 
 
@@ -19,18 +20,24 @@ class ParisSnowball(AutocallableBase):
     def __init__(self, s0, barrier_out, barrier_in, coupon_out, lock_term=3, obs_dates=None, pay_dates=None,
                  coupon_div=None, knock_in_obs_dates=None, knock_in_times=2, knockout_freq="w", parti_in=1,
                  margin_lvl=1, status=StatusType.NoTouch, engine=None, maturity=None, start_date=None, end_date=None,
-                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243):
+                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
         """继承自动赎回基类AutocallableBase的参数，详见AutocallableBase的__init__方法
-        Args:
+        Args: 以下为区别于经典雪球的参数
             knock_in_obs_dates: 敲入观察日期列表，List[datetime.date]，可缺省，缺省时会自动生成每月观察的敲入日期序列(已根据节假日调整)
             knock_in_times: 巴黎特性 - 累计敲入n次才算敲入
             knockout_freq: 敲出观察频率，"w"表示每周观察，"m"表示每月观察
-        Returns: None
+        可选参数:
+            若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
+            则默认使用巴黎雪球蒙特卡洛模拟定价引擎 FdmSnowBallEngine
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__(s0=s0, maturity=maturity, start_date=start_date, end_date=end_date, lock_term=lock_term,
-                         trade_calendar=trade_calendar, status=status, engine=engine,
-                         annual_days=annual_days, t_step_per_year=t_step_per_year, parti_in=parti_in,
-                         margin_lvl=margin_lvl)
+                         trade_calendar=trade_calendar, status=status, annual_days=annual_days,
+                         t_step_per_year=t_step_per_year, parti_in=parti_in, margin_lvl=margin_lvl)
         # 巴黎雪球参数
         if knock_in_obs_dates is None:  # 敲入观察日列表，每月观察
             self.knock_in_obs_dates = Schedule(trade_calendar=trade_calendar, start=self.start_date, end=self.end_date,
@@ -61,6 +68,11 @@ class ParisSnowball(AutocallableBase):
         self.parti_out = 0
         self.strike_upper = s0
         self.strike_lower = 0
+        if engine is not None:
+            self.set_pricing_engine(engine)
+        elif s is not None and r is not None and q is not None and vol is not None:
+            default_engine = MCParisSnowballEngine(s=s, r=r, q=q, vol=vol)
+            self.set_pricing_engine(default_engine)
 
     @time_this
     def price(self, t: datetime.date = None, spot=None):

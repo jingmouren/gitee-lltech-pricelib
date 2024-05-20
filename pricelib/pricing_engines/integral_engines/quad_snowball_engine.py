@@ -11,7 +11,9 @@ from pricelib.common.time import global_evaluation_date
 
 
 class QuadSnowballEngine(QuadEngine):
-    """雪球数值积分法定价引擎，仅支持非到期观察敲入(到期观察敲入如FCN、DCN等另有更快的算法)"""
+    """雪球数值积分法定价引擎
+    只支持不是仅到期观察敲入的结构 (只有到期观察敲入的结构，如FCN、DCN等另有更快的算法)
+    支持变敲出、变敲入、变票息等要素可变型雪球结构"""
 
     def __init__(self, stoch_process=None, quad_method=QuadMethod.Simpson, n_points=801, n_max=4, *,
                  s=None, r=None, q=None, vol=None):

@@ -19,7 +19,7 @@ class FdmDigitalEngine(FdmEngine):
             美式 - 美式双接触/美式双不接触
     """
 
-    def __init__(self, stoch_process=None, s_step=400, n_smax=4, fdm_theta=1, *,
+    def __init__(self, stoch_process=None, s_step=800, n_smax=2, fdm_theta=1, *,
                  s=None, r=None, q=None, vol=None):
         """构造函数
         Args:

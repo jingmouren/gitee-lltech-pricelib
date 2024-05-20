@@ -15,7 +15,7 @@ from pricelib.common.pricing_engine_base import AnalyticEngine
 class AnalyticDoubleDigitalEngine(AnalyticEngine):
     """双边二元期权闭式级数近似解定价引擎
     Hui(1996) One-Touch Double Barrier Binary Option Values
-    只支持美式双接触/双不接触, 到期支付"""
+    只支持美式双接触/双不接触, 到期支付；双接触期权的下边界payoff和上边界payoff必须相等"""
 
     def __init__(self, stoch_process: StochProcessBase = None, series_num=10, *,
                  s=None, r=None, q=None, vol=None):
@@ -35,7 +35,7 @@ class AnalyticDoubleDigitalEngine(AnalyticEngine):
     # pylint: disable=invalid-name, too-many-locals
     def calc_present_value(self, prod, t=None, spot=None):
         assert (prod.payment_type == PaymentType.Expire and
-                prod.exercise_type == ExerciseType.American), "Warning: Hui(1996)双边二元期权级数近似解, 只支持美式双接触/双不接触, 到期支付"
+                prod.exercise_type == ExerciseType.American), "Error: Hui(1996)双边二元期权级数近似解, 只支持美式双接触/双不接触, 到期支付"
 
         calculate_date = global_evaluation_date() if t is None else t
         _maturity = prod.trade_calendar.business_days_between(calculate_date, prod.end_date) / prod.t_step_per_year
@@ -71,6 +71,6 @@ class AnalyticDoubleDigitalEngine(AnalyticEngine):
         if prod.touch_type == TouchType.NoTouch:
             return double_no_touch
         if prod.touch_type == TouchType.Touch:
-            assert prod.rebate[0] == prod.rebate[1], "Error: Hui(1996)双边二元期权闭式解, 双接触期权补偿回报必须相等"
+            assert prod.rebate[0] == prod.rebate[1], "Error: Hui(1996)双边二元期权闭式解, 双接触期权的下边界payoff和上边界payoff必须相等"
             return prod.rebate[0] * np.exp(-r * _maturity) - double_no_touch
         raise ValueError("Hui(1996)双边二元期权闭式解, 未知的触碰类型")

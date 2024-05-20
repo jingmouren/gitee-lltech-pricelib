@@ -11,6 +11,8 @@ from pricelib.common.time import CN_CALENDAR, AnnualDays, global_evaluation_date
 from pricelib.common.utilities.patterns import Observer
 from pricelib.common.utilities.utility import time_this, logging
 from pricelib.common.product_base.option_base import OptionBase
+from pricelib.pricing_engines.analytic_engines import AnalyticDoubleDigitalEngine
+from pricelib.pricing_engines.fdm_engines import FdmDigitalEngine
 
 
 class DoubleDigitalOption(OptionBase, Observer):
@@ -21,7 +23,8 @@ class DoubleDigitalOption(OptionBase, Observer):
     def __init__(self, touch_type: TouchType, exercise_type: ExerciseType, payment_type: PaymentType,
                  *, bound=(80, 120), rebate=(0, 0), engine=None, status=StatusType.NoTouch,
                  maturity=None, start_date=None, end_date=None, discrete_obs_interval=None,
-                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243):
+                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
         """构造函数
         产品参数:
             touch_type: 接触方式 - 接触Touch/不接触NotTouch
@@ -30,8 +33,12 @@ class DoubleDigitalOption(OptionBase, Observer):
             bound: (float, float), (低障碍价, 高障碍价)
             rebate: (float, float), 触碰payoff的绝对数值，非年化
                     双接触: (下边界payoff, 上边界payoff); 双不接触: (到期不接触的payoff, 无作用)
+            status: 定价时，触碰障碍的状态，StatusType枚举类，默认为NoTouch
             engine: 定价引擎，PricingEngine类
-            status: 触碰障碍的状态，StatusType枚举类，默认为NoTouch
+                    解析解: AnalyticDoubleDigitalEngine - Hui(1996) 级数近似解，双接触期权的下边界payoff和上边界payoff必须相等
+                                                        支持 连续/离散观察、到期支付的(美式)双接触/双不接触
+                    PDE: FdmDigitalEngine 支持 (欧式)二元凹式/二元凸式；支持 连续/离散观察、立即/到期支付的(美式)双接触/美式双不接触
+                    蒙特卡洛: MCDoubleDigitalEngine 支持 (欧式)二元凹式/二元凸式；只支持离散观察、立即/到期支付的(美式)双接触/美式双不接触
         时间参数: 要么输入年化期限，要么输入起始日和到期日
             maturity: float，年化期限
             start_date: datetime.date，起始日
@@ -40,7 +47,15 @@ class DoubleDigitalOption(OptionBase, Observer):
             annual_days: int，每年的自然日数量
             t_step_per_year: int，每年的交易日数量
             discrete_obs_interval: 观察时间间隔. 若为连续观察，None；若为均匀离散观察，为年化的观察时间间隔
-        Returns: None
+        可选参数:
+            若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
+            则使用默认定价引擎：
+                到期支付的美式双不接触默认使用 Hui(1996) 级数近似解 AnalyticDoubleDigitalEngine
+                其余情况默认使用 PDE 定价引擎 FdmDigitalEngine
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__()
         self.trade_calendar = trade_calendar
@@ -60,6 +75,14 @@ class DoubleDigitalOption(OptionBase, Observer):
         self.status = status
         if engine is not None:
             self.set_pricing_engine(engine)
+        elif s is not None and r is not None and q is not None and vol is not None:
+            if (exercise_type == ExerciseType.American and payment_type == PaymentType.Expire
+                    and touch_type == TouchType.NoTouch):
+                default_engine = AnalyticDoubleDigitalEngine(s=s, r=r, q=q, vol=vol)
+                self.set_pricing_engine(default_engine)
+            else:
+                default_engine = FdmDigitalEngine(s=s, r=r, q=q, vol=vol)
+                self.set_pricing_engine(default_engine)
 
     def set_pricing_engine(self, engine):
         """设置定价引擎，同时将自己注册为观察者。若已有定价引擎，先将自己从原定价引擎的观察者列表中移除"""

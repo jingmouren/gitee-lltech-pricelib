@@ -143,7 +143,8 @@ class OptionBase(metaclass=ABCMeta):
         Args:
             t: int，期权价值矩阵的列(时间)的索引
             spot: float，价格的绝对值
-        Returns: pv, delta, gamma, vega, theta, rho
+        Returns:
+            Dict[str:float]: {'pv': pv, 'delta': delta, 'gamma': gamma, 'theta': theta, 'vega': vega, 'rho': rho}
         """
         if hasattr(self.engine, "pv_and_greeks"):
             with suppress(AttributeError):
@@ -174,4 +175,4 @@ class OptionBase(metaclass=ABCMeta):
         next_date = self.trade_calendar.advance(global_evaluation_date(), t_step)
         new_price = self.price(t=next_date, spot=spot)
         theta = (new_price - pv) / spot
-        return pv, delta, gamma, vega, theta, rho
+        return {'pv': pv, 'delta': delta, 'gamma': gamma, 'vega': vega, 'theta': theta, 'rho': rho}

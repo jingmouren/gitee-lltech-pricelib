@@ -52,10 +52,10 @@ def test_phoenix_demo():
 
 
 def test_standard_snowball_demo():
-    expected_data = {'结构': '经典雪球(平敲雪球)', 'MonteCarlo': 100.00658971084546, 'PDE': 99.90910316342752,
-                     'Quadrature': 100.07847347363567, 'pde_pct': '-0.097%', 'quad_pct': '0.072%'}
-    expected_greeks = {'price_pde': 99.90910316342752, 'delta': 0.369474431864667, 'gamma': -0.058712416510275034,
-                       'theta': 0.0003692511667713916, 'vega': -0.006932521782798631, 'rho': -0.00240883815238675}
+    expected_data = {'结构': '经典雪球(平敲雪球)', 'MonteCarlo': 100.00658971084546, 'PDE': 100.03259925884484,
+                     'Quadrature': 100.07847347363567, 'pde_pct': '0.026%', 'quad_pct': '0.072%'}
+    expected_greeks = {'price_pde': 100.03259925884484, 'delta': 0.35958287833916813, 'gamma': -0.05885096298173664,
+                       'vega': -0.007069290360621352, 'theta': 0.0003696173738435959, 'rho': -0.002562973588188697}
     res_df, greeks = standard_snowball_demo.run()
     assert expected_data == pytest.approx(res_df, rel=1e-10)
     assert expected_greeks == pytest.approx(greeks, rel=1e-10)
@@ -122,10 +122,10 @@ def test_bothdown_snowball_demo():
 
 
 def test_parachute_snowball_demo():
-    expected_data = {'结构': '降落伞雪球', 'MonteCarlo': 99.27530066736863, 'PDE': 99.26716711461428,
+    expected_data = {'结构': '降落伞雪球', 'MonteCarlo': 99.27530066736863, 'PDE': 99.25876664922352,
                      'Quadrature': 99.27687867564143}
-    expected_greeks = {'price_pde': 99.26716711461428, 'delta': 0.4270126473324254, 'gamma': -0.04841506348533642,
-                       'theta': 0.0003234177214700651, 'vega': -0.00638494875394386, 'rho': -0.0014908618185643264}
+    expected_greeks = {'price_pde': 99.25876664922352, 'delta': 0.4275397355739159, 'gamma': -0.04838673805178928,
+                       'vega': -0.006582582110301161, 'theta': 0.00032340023270862163, 'rho': -0.0015798927309687372}
 
     res_df, greeks = parachute_snowball_demo.run()
     assert expected_data == pytest.approx(res_df, rel=1e-10)
@@ -144,8 +144,8 @@ def test_snowball_plus_demo():
 
 
 def test_paris_snowball_demo():
-    expected_data = {'结构': '巴黎雪球', 'price_mc': 100.03026316804844, 'delta': 0.45528940073680246,
-                     'gamma': -0.11358651829419841, 'theta': 2.9542325602847086e-05, 'vega': -0.00928284151707203,
-                     'rho': -0.0010586692801366837}
+    expected_data = {'pv': 100.01742416459761, 'delta': 0.43278297470384075, 'gamma': -0.03718829098156107,
+                     'vega': -0.008608643540902107, 'theta': 0.00010993612208196169, 'rho': -0.0008765889543886373,
+                     '结构': '巴黎雪球'}
     res = paris_snowball_demo.run()
     assert expected_data == pytest.approx(res, rel=1e-10)

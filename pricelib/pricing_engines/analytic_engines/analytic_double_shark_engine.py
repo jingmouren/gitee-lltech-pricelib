@@ -14,7 +14,16 @@ from .analytic_double_digital_engine import AnalyticDoubleDigitalEngine
 
 
 class AnalyticDoubleSharkEngine(AnalyticEngine):
-    """双鲨结构闭式解定价引擎, 由双边敲出看涨与双边敲出看跌组合而成"""
+    """双鲨结构闭式解定价引擎, 由双边敲出看涨与双边敲出看跌组合而成，现金返还使用美式双接触闭式解
+        Haug(1998) Put-Call Barrier Transformations 对于标的持有成本为0的期权(期货期权)，利用认购-认沽障碍期权对称性，
+                                                    利用单边障碍期权解析解的组合给双障碍期权定价。
+        Ikeda and Kunitomo(1992)将双障碍期权表示为加权正态分布函数的无限集，但是仅当行权价在障碍范围内时，公式才是成立的。
+    Haug(1998)的解析解与Ikeda and Kunitomo(1992)的结果几乎一致，两者对比，
+        Ikeda and Kunitomo(1992)适用于标的持有成本不为0的情形, Haug(1998)适用于行权价在障碍范围之外的情形。
+    由于现金返还使用了美式双接触闭式解Hui(1996)，双接触期权的下边界payoff和上边界payoff必须相等，
+        所以双鲨闭式解的高低敲出现金返还也必须相等，现金返还到期支付
+    只支持美式观察(整个有效期观察)；支持连续观察/离散观察(默认为每日观察)
+    """
 
     def __init__(self, stoch_process: StochProcessBase = None, formula_type="Ikeda&Kunitomo1992",
                  series_num=10, delta1=0, delta2=0, *,
@@ -23,11 +32,6 @@ class AnalyticDoubleSharkEngine(AnalyticEngine):
         Args:
             stoch_process: 随机过程StochProcessBase对象
             self.formula_type: 解析解类型，Ikeda&Kunitomo1992或Haug1998
-                Haug(1998) Put-Call Barrier Transformations 对于标的持有成本为0的期权(期货期权)，利用认购-认沽障碍期权对称性，
-                                                利用单边障碍期权解析解的组合给双障碍期权定价。
-                Ikeda and Kunitomo(1992)将双障碍期权表示为加权正态分布函数的无限集，但是仅当行权价在障碍范围内时，公式才是成立的。
-                Haug(1998)的解析解与Ikeda and Kunitomo(1992)的结果几乎一致，两者对比，
-                    Ikeda and Kunitomo(1992)适用于标的持有成本不为0的情形, Haug(1998)适用于行权价在障碍范围之外的情形。
         其他三个参数是Ikeda&Kunitomo1992的参数：
             self.series_num: 用于计算近似解的级数项 默认 i = -10 ~ 10
             self.delta1: 上边界的曲率

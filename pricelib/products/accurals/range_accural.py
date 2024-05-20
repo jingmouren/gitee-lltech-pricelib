@@ -10,6 +10,7 @@ from pricelib.common.time import (global_evaluation_date, CN_CALENDAR, AnnualDay
 from pricelib.common.utilities.patterns import Observer
 from pricelib.common.utilities.utility import time_this, logging
 from pricelib.common.product_base.option_base import OptionBase
+from pricelib.pricing_engines.mc_engines import MCRangeAccuralEngine
 
 
 class RangeAccural(OptionBase, Observer):
@@ -17,14 +18,15 @@ class RangeAccural(OptionBase, Observer):
 
     def __init__(self, s0, upper_strike=None, lower_strike=None, payment=0.1, engine=None, status=0,
                  maturity=None, start_date=None, end_date=None, trade_calendar=CN_CALENDAR,
-                 annual_days=AnnualDays.N365, t_step_per_year=243):
+                 annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
         """构造函数
         产品参数:
             s0: float，标的初始价格
             upper_strike: float，高行权价
             lower_strike: float，低行权价
             payment: float，区间内行权收益率，百分比
-            engine: 定价引擎，PricingEngine类，仅支持Monte Carlo模拟
+            engine: 定价引擎，PricingEngine类，仅支持Monte Carlo模拟 MCRangeAccuralEngine
             status: int，之前的累计次数，期初时是0
         时间参数: 要么输入年化期限，要么输入起始日和到期日
             maturity: float，年化期限
@@ -33,6 +35,13 @@ class RangeAccural(OptionBase, Observer):
             trade_calendar: 交易日历，Calendar类，默认为中国内地交易日历
             annual_days: int，每年的自然日数量
             t_step_per_year: int，每年的交易日数量
+        可选参数:
+            若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
+            则默认使用蒙特卡洛模拟定价引擎 (BSM模型)
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__()
         self.s0 = s0  # 标的初始价格
@@ -50,9 +59,11 @@ class RangeAccural(OptionBase, Observer):
         self.upper_strike = upper_strike
         self.lower_strike = lower_strike
         self.payment = payment  # 区间内行权收益率，百分比
+        self.status = status
         if engine is not None:
             self.set_pricing_engine(engine)
-        self.status = status
+        elif s is not None and r is not None and q is not None and vol is not None:
+            self.engine = MCRangeAccuralEngine(s=s, r=r, q=q, vol=vol)
 
     def set_pricing_engine(self, engine):
         with suppress(AttributeError):

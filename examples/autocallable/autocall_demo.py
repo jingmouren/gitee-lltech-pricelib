@@ -10,11 +10,17 @@ import pandas as pd
 from pricelib import *
 
 
+def lite():
+    """简易定价接口"""
+    option = AutoCall(maturity=2, lock_term=3, s0=100, barrier_out=100, coupon_out=0.044, coupon_div=0.02,
+                      callput=CallPut.Call, s=100, r=0.03, q=0.05, vol=0.2)
+    return option.pv_and_greeks()
+
+
 def run():
     # 1. 市场数据，包括标的物价格、无风险利率、分红率、波动率
     # 设置全局估值日
     set_evaluation_date(datetime.date(2022, 1, 4))
-    t_step_per_year = 243
     spot_price = SimpleQuote(value=100, name="中证1000指数")
     riskfree = ConstantRate(value=0.03, name="无风险利率")
     dividend = ConstantRate(value=0.05, name="中证1000贴水率")
@@ -24,15 +30,14 @@ def run():
     # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分、数值积分
     mc_engine = MCAutoCallEngine(process, n_path=100000, rands_method=RandsMethod.Pseudorandom,
                                  antithetic_variate=False, ld_method=LdMethod.Halton, seed=0)
-    quad_engine = QuadAutoCallEngine(process, quad_method=QuadMethod.Simpson, n_points=1001)
+    quad_engine = QuadAutoCallEngine(process, quad_method=QuadMethod.Simpson, n_points=1001, n_max=4)
     pde_engine = FdmSnowBallEngine(process, s_step=800, n_smax=2, fdm_theta=1)
     # 4. 定义产品：Autocall Note(二元小雪球)
     results = []
     for callput in CallPut:
         option = AutoCall(s0=100, maturity=2, start_date=datetime.date(2022, 1, 4), lock_term=3,
-                          trade_calendar=CN_CALENDAR, barrier_out=100, coupon_out=0.044, coupon_div=0.02,
-                          callput=callput, engine=None,
-                          obs_dates=None, pay_dates=None, margin_lvl=1, t_step_per_year=t_step_per_year)
+                          barrier_out=100, coupon_out=0.044, coupon_div=0.02, callput=callput, obs_dates=None,
+                          pay_dates=None, margin_lvl=1, trade_calendar=CN_CALENDAR, t_step_per_year=243, engine=None)
         # 5.为产品设置定价引擎
         option.set_pricing_engine(mc_engine)
         price_mc = option.price()
@@ -52,3 +57,4 @@ def run():
 if __name__ == '__main__':
     df1 = run()
     print(df1)
+    print(lite())

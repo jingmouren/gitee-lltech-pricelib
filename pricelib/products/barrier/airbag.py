@@ -11,6 +11,7 @@ from pricelib.common.time import CN_CALENDAR, AnnualDays, global_evaluation_date
 from pricelib.common.utilities.patterns import Observer
 from pricelib.common.utilities.utility import time_this, logging
 from pricelib.common.product_base.option_base import OptionBase
+from pricelib.pricing_engines.fdm_engines import FdmAirbagEngine
 
 
 class Airbag(OptionBase, Observer):
@@ -26,7 +27,8 @@ class Airbag(OptionBase, Observer):
 
     def __init__(self, strike, barrier, *, knockin_parti=1, call_parti=0.8, reset_call_parti=1, engine=None,
                  status=StatusType.NoTouch, maturity=None, start_date=None, end_date=None, discrete_obs_interval=None,
-                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year):
+                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
         """构造函数
         产品参数:
             strike:  float, 执行价
@@ -34,8 +36,12 @@ class Airbag(OptionBase, Observer):
             knockin_parti: float, 敲入的下跌参与率
             call_parti: float, 未敲入的看涨参与率
             reset_call_parti: float, 敲入的重置后看涨参与率
-            engine: 定价引擎，PricingEngine类
             status: 敲入状态，StatusType枚举类，默认为NoTouch
+            engine: 定价引擎，PricingEngine类
+                    解析解: AnalyticAirbagEngine 由障碍与二元解析解(资产或无)组合而成，所以敲入的下跌参与率与重置后看涨参与率必须相等。
+                                                支持连续观察/离散观察(默认为每日观察)
+                    PDE: FdmAirbagEngine 支持连续观察/离散观察(默认为每日观察)
+                    蒙特卡洛: MCAirbagEngine 只支持离散观察(默认为每日观察)
         时间参数: 要么输入年化期限，要么输入起始日和到期日
             maturity: float，年化期限
             start_date: datetime.date，起始日
@@ -44,7 +50,13 @@ class Airbag(OptionBase, Observer):
             annual_days: int，每年的自然日数量
             t_step_per_year: int，每年的交易日数量
             discrete_obs_interval: 观察时间间隔. 若为连续观察，None；若为均匀离散观察，为年化的观察时间间隔
-        Returns: None
+        可选参数:
+            若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
+            则默认使用 PDE 定价引擎 FdmAirbagEngine
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__()
         self.trade_calendar = trade_calendar
@@ -64,6 +76,9 @@ class Airbag(OptionBase, Observer):
         self.status = status
         if engine is not None:
             self.set_pricing_engine(engine)
+        elif s is not None and r is not None and q is not None and vol is not None:
+            default_engine = FdmAirbagEngine(s=s, r=r, q=q, vol=vol)
+            self.set_pricing_engine(default_engine)
 
     def set_pricing_engine(self, engine):
         """设置定价引擎，同时将自己注册为观察者。若已有定价引擎，先将自己从原定价引擎的观察者列表中移除"""

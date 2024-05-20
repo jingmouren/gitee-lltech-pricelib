@@ -11,30 +11,39 @@ from pricelib.common.time import CN_CALENDAR, AnnualDays, global_evaluation_date
 from pricelib.common.utilities.patterns import Observer
 from pricelib.common.utilities.utility import time_this, logging
 from pricelib.common.product_base.option_base import OptionBase
+from pricelib.pricing_engines.fdm_engines import FdmBarrierEngine
 
 
 class DoubleBarrierOption(OptionBase, Observer):
-    """双边障碍期权(call或put，不是双鲨结构)"""
+    """双边障碍期权
+    (call或put，不是双鲨结构)"""
 
     def __init__(self, strike, callput: CallPut, inout: InOut, exercise_type=ExerciseType.American,
                  payment_type=PaymentType.Expire, *, bound=(80, 120), rebate=(0, 0), parti=1, engine=None,
                  status=StatusType.NoTouch, maturity=None, start_date=None, end_date=None, window=(None, None),
                  discrete_obs_interval=None, trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365,
-                 t_step_per_year=243):
+                 t_step_per_year=243, s=None, r=None, q=None, vol=None):
         """构造函数
         产品参数:
             strike: float, 执行价
+            bound: (lower_barrier, upper_barrier), 低障碍价/高障碍价，障碍价格绝对数值
             callput: 看涨看跌类型，CallPut枚举类，Call/Put
             inout: 敲入敲出类型，InOut枚举类，In敲入/Out敲出
             exercise_type: 障碍观察类型，ExerciseType枚举类，美式观察American/欧式到期观察European
-            payment_type: 支付类型，PaymentType枚举类，默认为到期支付Expire
-            bound: (lower_barrier, upper_barrier), 低障碍价/高障碍价，障碍价格绝对数值。如果是默认值None，即为无穷大或无穷小inf。
-            rebate: (lower_rebate, upper_rebate), 未敲出补偿/敲入补偿的绝对数值，非年化
-                                                  对敲出期权，元组第一位是低障碍价下方的补偿，第二位是高障碍价上方的补偿，
-                                                  对敲入期权，元组第一位是敲入补偿，第二位没有用处。
+            payment_type: 现金返还支付类型，PaymentType枚举类
+                          敲入现金返还一定是到期支付Expire，敲出可以是到期支付Expire或者障碍触发支付Barrier
+            rebate: (lower_rebate, upper_rebate), 未敲出现金返还/敲入现金返还的绝对数值，非百分比，非年化
+                                                  对敲出期权，元组第一位是低障碍价下方的现金返还，第二位是高障碍价上方的现金返还，
+                                                  对敲入期权，元组第一位是敲入现金返还，第二位没有用处。
             parti: float, 香草期权的参与率，默认为1
-            engine: 定价引擎，PricingEngine类
             status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
+            engine: 定价引擎，PricingEngine类
+                    解析解: AnalyticDoubleBarrierEngine 只支持美式观察(整个有效期观察)；支持连续观察/离散观察(默认为每日观察)；
+                                                       没有现金返还，现金返还都是0
+                    PDE: FdmBarrierEngine  只支持美式观察(整个有效期观察)；支持连续观察/离散观察(默认为每日观察)；
+                                           支持现金返还；敲入现金返还为到期支付；敲出现金返还支持 立即支付/到期支付
+                    蒙特卡洛: MCDoubleBarrierEngine  支持欧式观察(仅到期观察)/美式观察(整个有效期观察)；只支持离散观察(默认为每日观察)；
+                                            支持现金返还；敲入现金返还为到期支付；敲出现金返还支持 立即支付/到期支付
         时间参数: 要么输入年化期限，要么输入起始日和到期日
             maturity: float，年化期限
             start_date: datetime.date，起始日
@@ -45,6 +54,13 @@ class DoubleBarrierOption(OptionBase, Observer):
             trade_calendar: 交易日历，Calendar类，默认为中国内地交易日历
             annual_days: int，每年的自然日数量
             t_step_per_year: int，每年的交易日数量
+        可选参数:
+            若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
+            则默认使用PDE定价引擎 FdmBarrierEngine
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__()
         self.trade_calendar = trade_calendar
@@ -68,6 +84,9 @@ class DoubleBarrierOption(OptionBase, Observer):
         self.status = status
         if engine is not None:
             self.set_pricing_engine(engine)
+        elif s is not None and r is not None and q is not None and vol is not None:
+            default_engine = FdmBarrierEngine(s=s, r=r, q=q, vol=vol)
+            self.set_pricing_engine(default_engine)
 
     def set_pricing_engine(self, engine):
         """设置定价引擎，同时将自己注册为观察者。若已有定价引擎，先将自己从原定价引擎的观察者列表中移除"""

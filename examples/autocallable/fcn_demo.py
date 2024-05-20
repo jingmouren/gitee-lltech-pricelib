@@ -8,11 +8,18 @@ import datetime
 from pricelib import *
 
 
+def lite():
+    """简易定价接口"""
+    option = FCN(maturity=2, lock_term=3, s0=100, barrier_out=100, barrier_in=80, coupon=0.00322,
+                 s=100, r=0.02, q=0.04, vol=0.16)
+    return option.pv_and_greeks()
+
+
 def run():
+    """自行配置定价引擎 """
     # 1. 市场数据，包括标的物价格、无风险利率、分红率、波动率
     # 设置全局估值日
     set_evaluation_date(datetime.date(2022, 1, 4))
-    t_step_per_year = 243
     spot_price = SimpleQuote(value=100, name="中证1000指数")
     riskfree = ConstantRate(value=0.02, name="无风险利率")
     dividend = ConstantRate(value=0.04, name="中证1000贴水率")
@@ -28,7 +35,7 @@ def run():
     # 4. 定义产品：FCN(Fixed Coupon Note固定派息票据)
     option = FCN(maturity=2, s0=100, start_date=datetime.date(2022, 1, 4), trade_calendar=CN_CALENDAR,
                  barrier_out=100, barrier_in=80, strike_upper=None, coupon=0.00322, lock_term=3,
-                 engine=None, status=StatusType.NoTouch, t_step_per_year=t_step_per_year)
+                 engine=None, status=StatusType.NoTouch, t_step_per_year=243)
 
     # 5.为产品设置定价引擎
     option.set_pricing_engine(mc_engine)
@@ -36,8 +43,8 @@ def run():
 
     option.set_pricing_engine(pde_engine)
     price_pde = option.price()
-    pde_greeks = {"price_pde": price_pde, "delta": option.delta(), "gamma": option.gamma(), "theta": option.theta(),
-                  "vega": option.vega(), "rho": option.rho()}
+    pde_greeks = {"price_pde": price_pde, "delta": option.delta(), "gamma": option.gamma(), "vega": option.vega(),
+                  "theta": option.theta(), "rho": option.rho()}
 
     option.set_pricing_engine(quad_engine)
     price_quad = option.price()
@@ -51,3 +58,4 @@ if __name__ == '__main__':
     for k, v in res.items():
         print(f'{k}: {v}')
     print(greeks)
+    print(lite())

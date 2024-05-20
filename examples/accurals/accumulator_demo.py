@@ -9,12 +9,20 @@ import pandas as pd
 from pricelib import *
 
 
+def lite():
+    """简易定价接口"""
+    option = Accumulator(s0=100, maturity=2, barrier_out=110, strike=87.14, leverage_ratio=2,
+                         s=100, r=0.02, q=0.04, vol=0.16)
+    return option.pv_and_greeks()
+
+
 def run():
+    """自行配置定价引擎 """
     # 1. 市场数据，包括标的物价格、无风险利率、分红率、波动率
     # 设置全局估值日
     set_evaluation_date(datetime.date(2022, 1, 5))
     # 2&3. 定价引擎，随机过程使用默认的BSM
-    mc_engine = MCAccumulatorEngine(n_path=100000, rands_method=RandsMethod.Pseudorandom,
+    mc_engine = MCAccumulatorEngine(n_path=100000, rands_method=RandsMethod.LowDiscrepancy,
                                     antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0,
                                     s=100, r=0.02, q=0.04, vol=0.16)
     # 4. 定义产品：累购、累沽
@@ -41,3 +49,4 @@ def run():
 if __name__ == '__main__':
     df1 = run()
     print(df1)
+    print(lite())

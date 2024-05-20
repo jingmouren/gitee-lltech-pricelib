@@ -14,11 +14,12 @@ class ButterflySnowball(AutocallableBase):
     """蝶变雪球结构产品类"""
 
     def __init__(self, s0, barrier_out, barrier_in, coupon_out1, coupon_out2, coupon_out3, coupon_div=None, lock_term=3,
-                 maturity=None, start_date=None, end_date=None, trade_calendar=CN_CALENDAR, obs_dates=None,
-                 coupon_stair_ends=(12, 24, 36), pay_dates=None, engine=None,
-                 status=StatusType.NoTouch, annual_days=AnnualDays.N365, parti_in=1, margin_lvl=1, t_step_per_year=243):
+                 maturity=None, start_date=None, end_date=None, obs_dates=None, pay_dates=None, parti_in=1,
+                 margin_lvl=1, coupon_stair_ends=(12, 24, 36), status=StatusType.NoTouch, engine=None,
+                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
         """继承自动赎回基类AutocallableBase的参数，详见AutocallableBase的__init__方法
-        Args:
+        Args: 以下为区别于经典雪球的参数
             coupon_out1: float，第一阶段敲出票息，百分比，年化
             coupon_out2: float，第二阶段敲出票息，百分比，年化
             coupon_out3: float，第三阶段敲出票息，百分比，年化
@@ -27,7 +28,7 @@ class ButterflySnowball(AutocallableBase):
         super().__init__(s0=s0, maturity=maturity, start_date=start_date, end_date=end_date, lock_term=lock_term,
                          trade_calendar=trade_calendar, obs_dates=obs_dates, pay_dates=pay_dates, status=status,
                          annual_days=annual_days, parti_in=parti_in, margin_lvl=margin_lvl,
-                         t_step_per_year=t_step_per_year)
+                         t_step_per_year=t_step_per_year, engine=engine, s=s, r=r, q=q, vol=vol)
         len_obs_dates = len(self.obs_dates.date_schedule)
 
         self.barrier_out = np.ones(len_obs_dates) * barrier_out
@@ -41,9 +42,6 @@ class ButterflySnowball(AutocallableBase):
         self.parti_out = 0
         self.strike_upper = s0
         self.strike_lower = 0
-
-        if engine is not None:
-            self.set_pricing_engine(engine)
 
     def __repr__(self):
         """返回期权的描述"""

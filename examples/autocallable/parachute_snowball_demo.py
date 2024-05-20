@@ -7,7 +7,16 @@ Licensed under the Apache License, Version 2.0
 import datetime
 from pricelib import *
 
+
+def lite():
+    """简易定价接口"""
+    option = ParachuteSnowball(maturity=2, lock_term=3, s0=100, barrier_out=103, barrier_out_final=90, barrier_in=75,
+                               coupon_out=0.102, coupon_div=0.02, s=100, r=0.02, q=0.03, vol=0.15)
+    return option.pv_and_greeks()
+
+
 def run():
+    """自行配置定价引擎 """
     # 1. 市场数据，包括标的物价格、无风险利率、分红率、波动率
     # 设置全局估值日
     set_evaluation_date(datetime.date(2023, 5, 8))
@@ -21,7 +30,7 @@ def run():
     mc_engine = MCAutoCallableEngine(process, n_path=100000, rands_method=RandsMethod.Pseudorandom,
                                      antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0)
     quad_engine = QuadSnowballEngine(process, quad_method=QuadMethod.Simpson, n_points=1601)
-    pde_engine = FdmSnowBallEngine(process, s_step=200, n_smax=2, fdm_theta=1)
+    pde_engine = FdmSnowBallEngine(process, s_step=800, n_smax=2, fdm_theta=1)
 
     # 4. 定义产品：降落伞雪球
     option = ParachuteSnowball(maturity=2, s0=100, start_date=datetime.date(2023, 5, 8),
@@ -34,8 +43,8 @@ def run():
 
     option.set_pricing_engine(pde_engine)
     price_pde = option.price()
-    pde_greeks = {"price_pde": price_pde, "delta": option.delta(), "gamma": option.gamma(), "theta": option.theta(),
-                  "vega": option.vega(), "rho": option.rho()}
+    pde_greeks = {"price_pde": price_pde, "delta": option.delta(), "gamma": option.gamma(), "vega": option.vega(),
+                  "theta": option.theta(), "rho": option.rho()}
 
     option.set_pricing_engine(quad_engine)
     price_quad = option.price()
@@ -49,3 +58,4 @@ if __name__ == '__main__':
     for k, v in res.items():
         print(f'{k}: {v}')
     print(greeks)
+    print(lite())

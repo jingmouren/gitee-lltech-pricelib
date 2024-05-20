@@ -10,7 +10,8 @@ from .fdm_barrier_engine import FdmBarrierEngine
 
 class FdmAirbagEngine(FdmBarrierEngine):
     """安全气囊PDE有限差分法定价引擎
-    安全气囊是向下敲入看涨期权，到期支付"""
+    安全气囊是向下敲入看涨期权，到期支付
+    支持连续观察/离散观察(默认为每日观察)"""
 
     def _init_boundary_condition(self, smax, maturity):
         """初始化边界条件

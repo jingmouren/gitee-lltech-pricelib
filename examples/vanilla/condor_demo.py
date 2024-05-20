@@ -8,7 +8,15 @@ import pandas as pd
 from pricelib import *
 
 
+def lite():
+    """简易定价接口"""
+    option = Condor(strike1=80, strike2=90, strike3=110, strike4=120, maturity=0.5, callput=CallPut.Call,
+                    s=100, r=0.03, q=0.05, vol=0.16)
+    return option.pv_and_greeks()
+
+
 def run():
+    """自行配置定价引擎 """
     # 1. 市场数据，包括标的物价格、无风险利率、分红率、波动率
     spot_price = SimpleQuote(value=100, name="中证1000指数")
     riskfree = ConstantRate(value=0.03, name="无风险利率")
@@ -57,3 +65,4 @@ def run():
 if __name__ == '__main__':
     df1 = run()
     print(df1)
+    print(lite())

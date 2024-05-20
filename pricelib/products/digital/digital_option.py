@@ -11,6 +11,7 @@ from pricelib.common.time import CN_CALENDAR, AnnualDays, global_evaluation_date
 from pricelib.common.utilities.patterns import Observer
 from pricelib.common.utilities.utility import time_this, logging
 from pricelib.common.product_base.option_base import OptionBase
+from pricelib.pricing_engines.analytic_engines import AnalyticCashOrNothingEngine
 
 
 class DigitalOption(OptionBase, Observer):
@@ -21,7 +22,7 @@ class DigitalOption(OptionBase, Observer):
     def __init__(self, strike, rebate, callput: CallPut, exercise_type: ExerciseType, payment_type: PaymentType, *,
                  maturity=None, start_date=None, end_date=None, engine=None, status=StatusType.NoTouch,
                  discrete_obs_interval=None, trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365,
-                 t_step_per_year=243):
+                 t_step_per_year=243, s=None, r=None, q=None, vol=None):
         """构造函数
         产品参数:
             strike:  float, 执行价
@@ -29,8 +30,14 @@ class DigitalOption(OptionBase, Observer):
             callput: 看涨看跌类型，CallPut枚举类，Call/Put
             exercise_type: 行权方式，ExerciseType枚举类，European/American
             payment_type: 支付方式，PaymentType枚举类，立即支付Hit/到期支付Expire
-            engine: 定价引擎，PricingEngine类
             status: 触碰障碍的状态，StatusType枚举类，默认为NoTouch
+            engine: 定价引擎，PricingEngine类，以下几种引擎均支持欧式二元(现金或无)、美式二元(立即支付)、一触即付(到期支付)，
+                            解析解和PDE引擎支持离散观察/连续观察，其余引擎只支持离散观察(默认为每日观察)
+                    解析解: AnalyticCashOrNothingEngine
+                    蒙特卡洛: MCDigitalEngine
+                    PDE: FdmDigitalEngine
+                    积分法: QuadDigitalEngine
+                    二叉树: BiTreeDigitalEngine
         时间参数: 要么输入年化期限，要么输入起始日和到期日
             maturity: float，年化期限
             start_date: datetime.date，起始日
@@ -39,7 +46,13 @@ class DigitalOption(OptionBase, Observer):
             annual_days: int，每年的自然日数量
             t_step_per_year: int，每年的交易日数量
             discrete_obs_interval: 观察时间间隔. 若为连续观察，None；若为均匀离散观察，为年化的观察时间间隔
-        Returns: None
+        可选参数:
+            若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
+            则默认使用 二元(数字)期权-现金或无(cash or nothing)-闭式解定价引擎 Reiner and Rubinstein(1991b)
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__()
         self.trade_calendar = trade_calendar
@@ -59,6 +72,9 @@ class DigitalOption(OptionBase, Observer):
         self.status = status
         if engine is not None:
             self.set_pricing_engine(engine)
+        elif s is not None and r is not None and q is not None and vol is not None:
+            default_engine = AnalyticCashOrNothingEngine(s=s, r=r, q=q, vol=vol)
+            self.set_pricing_engine(default_engine)
 
     def set_pricing_engine(self, engine):
         """设置定价引擎，同时将自己注册为观察者。若已有定价引擎，先将自己从原定价引擎的观察者列表中移除"""

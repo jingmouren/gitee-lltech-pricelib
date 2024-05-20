@@ -12,7 +12,9 @@ from pricelib.common.pricing_engine_base import McEngine
 
 
 class MCDoubleBarrierEngine(McEngine):
-    """双边障碍期权 Monte Carlo 模拟定价引擎"""
+    """双边障碍期权 Monte Carlo 模拟定价引擎
+    支持欧式观察(仅到期观察)/美式观察(整个有效期观察)；只支持离散观察(默认为每日观察)；
+    支持现金返还；敲入现金返还为到期支付；敲出现金返还支持 立即支付/到期支付"""
 
     def calc_present_value(self, prod, t=None, spot=None):
         """计算现值

@@ -19,7 +19,7 @@ class VanillaPortfolio(OptionBase):
     可以组合出价差、跨式、宽跨式、风险反转、领口、鹰式、蝶式等香草期权组合"""
 
     def __init__(self, maturity=None, start_date=None, end_date=None, trade_calendar=CN_CALENDAR,
-                 annual_days=AnnualDays.N365, t_step_per_year=243):
+                 annual_days=AnnualDays.N365, t_step_per_year=243, s=None, r=None, q=None, vol=None):
         """构造函数
         Args:
             maturity: float，年化期限
@@ -31,6 +31,12 @@ class VanillaPortfolio(OptionBase):
         初始化属性：
             underlying_list: 标的资产列表，[(underlying, position), ...]，其中underlying为UnderlyingAsset对象，position为持仓数量
             vanilla_list: 香草期权列表，[(vanilla, position), ...] ，其中vanilla为VanillaOption对象，position为持仓数量
+        若提供了标的价格、无风险利率、分红/融券率、波动率，
+            则默认使用解析解定价引擎 (BSM公式)
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__()
         logging.info("创建香草期权组合")
@@ -45,6 +51,12 @@ class VanillaPortfolio(OptionBase):
 
         self.underlying_list = []  # 标的资产列表
         self.vanilla_list = []  # 期权列表
+        if s is not None and r is not None and q is not None and vol is not None:
+            self.engine = AnalyticVanillaEuEngine(s=s, r=r, q=q, vol=vol)
+            self.default_engine = True
+        else:
+            self.engine = None
+            self.default_engine = False
 
     def add_underlying(self, s0, position=1.0):
         """添加标的资产
@@ -54,6 +66,8 @@ class VanillaPortfolio(OptionBase):
         Returns:
         """
         current_underlying = UnderlyingAsset(s0)
+        if self.default_engine:
+            current_underlying.set_pricing_engine(self.engine)
         self.underlying_list.append((current_underlying, position))
         self.show_current_portfolio()
 
@@ -75,6 +89,8 @@ class VanillaPortfolio(OptionBase):
         _end_date = end_date if end_date is not None else self.end_date
         current_vanilla = VanillaOption(strike=strike, maturity=_maturity, start_date=_start_date, end_date=_end_date,
                                         callput=callput, exercise_type=ExerciseType.European)
+        if self.default_engine:
+            current_vanilla.set_pricing_engine(self.engine)
         self.vanilla_list.append((current_vanilla, position))
         self.show_current_portfolio()
 
@@ -106,6 +122,7 @@ class VanillaPortfolio(OptionBase):
 
     def set_pricing_engine(self, engine):
         """设置定价引擎"""
+        self.default_engine = False
         self.engine = engine
         process = self.engine.process
         logging.info(f"{self}当前定价方法为{engine.engine_type.value}")
@@ -139,9 +156,10 @@ class Spread(VanillaPortfolio):
     """价差期权"""
 
     def __init__(self, lower_strike, upper_strike, callput: CallPut, maturity=None, start_date=None, end_date=None,
-                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243):
+                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
         super().__init__(maturity=maturity, start_date=start_date, end_date=end_date, trade_calendar=trade_calendar,
-                         annual_days=annual_days, t_step_per_year=t_step_per_year)
+                         annual_days=annual_days, t_step_per_year=t_step_per_year, s=s, r=r, q=q, vol=vol)
         self.lower_strike = lower_strike
         self.upper_strike = upper_strike
         self.callput = callput
@@ -160,10 +178,10 @@ class Butterfly(VanillaPortfolio):
     """蝶式期权"""
 
     def __init__(self, lower_strike, middle_strike, upper_strike, callput: CallPut, maturity=None, start_date=None,
-                 end_date=None, trade_calendar=CN_CALENDAR,
-                 annual_days=AnnualDays.N365, t_step_per_year=243):
-        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date,
-                         trade_calendar=trade_calendar, annual_days=annual_days, t_step_per_year=t_step_per_year)
+                 end_date=None, trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
+        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date, trade_calendar=trade_calendar,
+                         annual_days=annual_days, t_step_per_year=t_step_per_year, s=s, r=r, q=q, vol=vol)
         self.lower_strike = lower_strike
         self.middle_strike = middle_strike
         self.upper_strike = upper_strike
@@ -185,10 +203,10 @@ class Strangle(VanillaPortfolio):
     """宽跨式"""
 
     def __init__(self, lower_strike, upper_strike, callput: CallPut, maturity=None, start_date=None, end_date=None,
-                 trade_calendar=CN_CALENDAR,
-                 annual_days=AnnualDays.N365, t_step_per_year=243):
-        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date,
-                         trade_calendar=trade_calendar, annual_days=annual_days, t_step_per_year=t_step_per_year)
+                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
+        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date, trade_calendar=trade_calendar,
+                         annual_days=annual_days, t_step_per_year=t_step_per_year, s=s, r=r, q=q, vol=vol)
         self.lower_strike = lower_strike
         self.upper_strike = upper_strike
         self.callput = callput
@@ -207,10 +225,10 @@ class Straddle(VanillaPortfolio):
     """跨式"""
 
     def __init__(self, strike, callput: CallPut, maturity=None, start_date=None, end_date=None,
-                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365,
-                 t_step_per_year=243):
-        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date,
-                         trade_calendar=trade_calendar, annual_days=annual_days, t_step_per_year=t_step_per_year)
+                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
+        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date, trade_calendar=trade_calendar,
+                         annual_days=annual_days, t_step_per_year=t_step_per_year, s=s, r=r, q=q, vol=vol)
         self.strike = strike
         self.callput = callput
         self.add_vanilla(strike=self.strike, start_date=self.start_date, end_date=self.end_date, callput=CallPut.Put,
@@ -228,10 +246,10 @@ class Condor(VanillaPortfolio):
     """鹰式"""
 
     def __init__(self, strike1, strike2, strike3, strike4, callput: CallPut, maturity=None, start_date=None,
-                 end_date=None, trade_calendar=CN_CALENDAR,
-                 annual_days=AnnualDays.N365, t_step_per_year=243):
-        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date,
-                         trade_calendar=trade_calendar, annual_days=annual_days, t_step_per_year=t_step_per_year)
+                 end_date=None, trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
+        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date, trade_calendar=trade_calendar,
+                         annual_days=annual_days, t_step_per_year=t_step_per_year, s=s, r=r, q=q, vol=vol)
         self.strike1 = strike1
         self.strike2 = strike2
         self.strike3 = strike3
@@ -256,10 +274,10 @@ class DiscountCall(VanillaPortfolio):
     """折价看涨期权"""
 
     def __init__(self, strike, participate, callput=CallPut.Call, lower_strike=None, maturity=None, start_date=None,
-                 end_date=None, trade_calendar=CN_CALENDAR,
-                 annual_days=AnnualDays.N365, t_step_per_year=243):
-        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date,
-                         trade_calendar=trade_calendar, annual_days=annual_days, t_step_per_year=t_step_per_year)
+                 end_date=None, trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
+        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date, trade_calendar=trade_calendar,
+                         annual_days=annual_days, t_step_per_year=t_step_per_year, s=s, r=r, q=q, vol=vol)
         self.strike = strike
         if lower_strike is not None:
             self.lower_strike = lower_strike
@@ -283,10 +301,10 @@ class Collar(VanillaPortfolio):
     """领式"""
 
     def __init__(self, lower_strike, higher_strike, callput: CallPut, maturity=None, start_date=None, end_date=None,
-                 trade_calendar=CN_CALENDAR,
-                 annual_days=AnnualDays.N365, t_step_per_year=243):
-        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date,
-                         trade_calendar=trade_calendar, annual_days=annual_days, t_step_per_year=t_step_per_year)
+                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
+        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date, trade_calendar=trade_calendar,
+                         annual_days=annual_days, t_step_per_year=t_step_per_year, s=s, r=r, q=q, vol=vol)
         self.lower_strike = lower_strike
         self.higher_strike = higher_strike
         self.callput = callput
@@ -306,9 +324,10 @@ class RiskReversal(VanillaPortfolio):
     """风险反转"""
 
     def __init__(self, lower_strike, higher_strike, callput: CallPut, maturity=None, start_date=None, end_date=None,
-                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243):
-        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date,
-                         trade_calendar=trade_calendar, annual_days=annual_days, t_step_per_year=t_step_per_year)
+                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
+        super().__init__(maturity=maturity, start_date=start_date, end_date=end_date, trade_calendar=trade_calendar,
+                         annual_days=annual_days, t_step_per_year=t_step_per_year, s=s, r=r, q=q, vol=vol)
         self.lower_strike = lower_strike
         self.higher_strike = higher_strike
         self.callput = callput

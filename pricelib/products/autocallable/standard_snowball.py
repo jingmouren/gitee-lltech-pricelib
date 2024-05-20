@@ -16,7 +16,7 @@ class StandardSnowball(AutocallableBase):
     def __init__(self, s0, barrier_out, barrier_in, coupon_out, obs_dates=None, pay_dates=None, coupon_div=None,
                  lock_term=3, parti_in=1, margin_lvl=1, status=StatusType.NoTouch, engine=None, maturity=None,
                  start_date=None, end_date=None, trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365,
-                 t_step_per_year=243, ):
+                 t_step_per_year=243, s=None, r=None, q=None, vol=None):
         """构造函数
         产品参数:
             s0: float，标的初始价格
@@ -25,8 +25,11 @@ class StandardSnowball(AutocallableBase):
             coupon_out: float，敲出票息，百分比，年化
             coupon_div: float，红利票息，百分比，年化
             lock_term: int，锁定期，单位为月，锁定期内不触发敲出
-            engine: 定价引擎，PricingEngine类
             status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
+            engine: 定价引擎，PricingEngine类
+                    蒙特卡洛: MCAutoCallableEngine
+                    PDE: FdmSnowBallEngine
+                    积分法: QuadSnowballEngine
         时间参数: 要么输入年化期限，要么输入起始日和到期日；敲出观察日和票息支付日可缺省
             maturity: float，年化期限
             start_date: datetime.date，起始日
@@ -36,11 +39,18 @@ class StandardSnowball(AutocallableBase):
             trade_calendar: 交易日历，Calendar类，默认为中国内地交易日历
             annual_days: int，每年的自然日数量
             t_step_per_year: int，每年的交易日数量
+        可选参数:
+            若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
+            则默认使用PDE定价引擎 FdmSnowBallEngine
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__(s0=s0, maturity=maturity, start_date=start_date, end_date=end_date, lock_term=lock_term,
                          trade_calendar=trade_calendar, obs_dates=obs_dates, pay_dates=pay_dates, status=status,
                          annual_days=annual_days, t_step_per_year=t_step_per_year, parti_in=parti_in,
-                         margin_lvl=margin_lvl)
+                         margin_lvl=margin_lvl, engine=engine, s=s, r=r, q=q, vol=vol)
         len_obs_dates = len(self.obs_dates.date_schedule)
         self.barrier_out = np.ones(len_obs_dates) * barrier_out
         self.barrier_in = np.ones(len_obs_dates) * barrier_in
@@ -49,8 +59,6 @@ class StandardSnowball(AutocallableBase):
         self.parti_out = 0
         self.strike_upper = s0
         self.strike_lower = 0
-        if engine is not None:
-            self.set_pricing_engine(engine)
 
     def __repr__(self):
         """返回期权的描述"""

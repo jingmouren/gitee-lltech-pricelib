@@ -9,7 +9,16 @@ import pandas as pd
 from pricelib import *
 
 
+def lite():
+    """简易定价接口"""
+    option = BarrierOption(maturity=1, strike=100, barrier=110, rebate=0, parti=1,
+                           updown=UpDown.Up, inout=InOut.Out, callput=CallPut.Call,
+                           s=100, r=0.03, q=0.05, vol=0.2)
+    return option.pv_and_greeks()
+
+
 def run():
+    """自行配置定价引擎 """
     # 1. 市场数据，包括标的物价格、无风险利率、分红率、波动率
     # 设置全局估值日
     set_evaluation_date(datetime.date(2021, 1, 5))
@@ -90,3 +99,4 @@ if __name__ == '__main__':
     dfa, dfb = run()
     print(dfa)
     print(dfb)
+    print(lite())

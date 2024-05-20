@@ -11,6 +11,7 @@ from pricelib.common.time import (global_evaluation_date, Schedule, CN_CALENDAR,
 from pricelib.common.utilities.patterns import Observer
 from pricelib.common.utilities.utility import time_this, logging
 from pricelib.common.product_base.option_base import OptionBase
+from pricelib.pricing_engines.mc_engines import MCAccumulatorEngine
 
 
 class Accumulator(OptionBase, Observer):
@@ -25,7 +26,8 @@ class Accumulator(OptionBase, Observer):
 
     def __init__(self, s0, barrier_out=None, strike=None, leverage_ratio=None, obs_dates=None, margin_lvl=0.2,
                  engine=None, status=StatusType.NoTouch, maturity=None, start_date=None, end_date=None,
-                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243):
+                 trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,
+                 s=None, r=None, q=None, vol=None):
         """构造函数
         产品参数:
             s0: float，标的初始价格
@@ -35,7 +37,7 @@ class Accumulator(OptionBase, Observer):
                                                     当标的价格在执行价之上、敲出价之下时，购买1份标的
             margin_lvl: float，保证金比例，对于定价没有影响
             status: 敲出状态，默认为StatusType.NoTouch表示未敲出
-            engine: 定价引擎，PricingEngine类，仅支持Monte Carlo模拟
+            engine: 定价引擎，PricingEngine类，仅支持Monte Carlo模拟 MCAccumulatorEngine
         时间参数: 要么输入年化期限，要么输入起始日和到期日；敲出观察日可缺省
             maturity: float，年化期限
             start_date: datetime.date，起始日
@@ -44,6 +46,13 @@ class Accumulator(OptionBase, Observer):
             trade_calendar: 交易日历，Calendar类，默认为中国内地交易日历
             annual_days: int，每年的自然日数量
             t_step_per_year: int，每年的交易日数量
+        可选参数:
+            若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
+            则默认使用蒙特卡洛模拟定价引擎 (BSM模型)
+            s: float，标的价格
+            r: float，无风险利率
+            q: float，分红/融券率
+            vol: float，波动率
         """
         super().__init__()
         self.s0 = s0  # 标的初始价格
@@ -71,9 +80,12 @@ class Accumulator(OptionBase, Observer):
         else:
             self.obs_dates = Schedule(trade_calendar=trade_calendar, date_schedule=obs_dates)
         self.leverage_ratio = leverage_ratio
+        self.status = status
         if engine is not None:
             self.set_pricing_engine(engine)
-        self.status = status
+        elif s is not None and r is not None and q is not None and vol is not None:
+            self.engine = MCAccumulatorEngine(s=s, r=r, q=q, vol=vol)
+
 
     def set_pricing_engine(self, engine):
         """切换定价引擎"""

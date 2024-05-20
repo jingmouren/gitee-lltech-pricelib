@@ -20,6 +20,8 @@ from .analytic_barrier_engine import AnalyticBarrierEngine
 
 class AnalyticDoubleBarrierEngine(AnalyticEngine):
     """双边障碍期权闭式解定价引擎
+    双边敲出期权，到期时间 T 之前，满足L<S<U，则到期回报为max(S-K,0)，否则到期回报为0。双边敲入期权等于香草期权多头与双边敲出期权空头的组合。
+    注意: 没有现金返还，即rebate=0
     Haug(1998) Put-Call Barrier Transformations 对于标的持有成本为0的期权(期货期权)，利用认购-认沽障碍期权对称性，
                                                 利用单边障碍期权解析解的组合给双障碍期权定价。
     Ikeda and Kunitomo(1992)将双障碍期权表示为加权正态分布函数的无限集，但是仅当行权价在障碍范围内时，公式才是成立的。
