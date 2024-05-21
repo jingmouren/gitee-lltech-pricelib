@@ -10,7 +10,7 @@ from .products import *
 from .common import *
 from .common.utilities import SimpleQuote
 
-__author__ = '上海凌瓴信息科技有限公司: 马瑞祥, 夏鸿翔, 贡献: 张鹏任, 张峻蔚'
+__author__ = '上海凌瓴信息科技有限公司: 马瑞祥, 夏鸿翔, 贡献: 张鹏任, 张峻尉'
 __email__ = 'marx@galatech.com.cn'
 
 try:
