@@ -33,7 +33,7 @@
 <img src="./docs/otc_wiki_3.png" alt="场外百科全书-情景分析图" height="380">
 </div>
 
-我们会持续关注市场上的最新动态，迅速地在PriceLib中更新流行产品的定价模型。如果您有特别的产品定价需求，也可以与我们联系，我们通常可以在两至三天更新至PriceLib中。您可以通过Gitee社区与我们互动，或通过下方电话、邮件联系我们，也欢迎大家扫描下方二维码关注"凌瓴科技"微信公众号。
+我们会持续关注市场上的最新动态，迅速地在PriceLib中更新流行产品的定价模型。如果您有特别的产品定价需求，也可以与我们联系，我们通常可以在两至三天更新至PriceLib中。您可以在Gitee提交Issue，或通过下方电话、邮件联系我们，也欢迎大家扫描下方二维码关注"凌瓴科技"微信公众号。
 
 - 电话：021-50186069
 - 邮箱：marx@galatech.com.cn
@@ -74,17 +74,6 @@ fdm_engine = FdmVanillaEngine(s=100, r=0.02, q=0.01, vol=0.2)
 option.set_pricing_engine(fdm_engine)
 print(option.price())  
 ```
-再比如较为复杂的雪球结构，"敲出票息10%的一年期锁三103-80平敲雪球"，一样只需两行代码即可完成定价：
-
-```python
-from pricelib import *
-option = StandardSnowball(maturity=1, lock_term=3, s0=100, barrier_out=103,
-                          barrier_in=80, coupon_out=0.10, s=100, r=0.02,
-                          q=0.01, vol=0.16)
-print(option.price())  
-```
-这里的经典雪球会使用默认的PDE有限差分定价引擎。输入参数`s0=100, barrier_out=103, barrier_in=80`的价格是百分比形式，您也可以输入价格的绝对值，例如`s0=5535.40, barrier_out=5701.46, barrier_in=4428.32`，只要所有价格参数保持一致即可。
-
 调用产品对象的`delta, gamma, vega, theta, rho`方法，即可计算常见的5种期权希腊值：
 ```python
 print({"delta": option.delta(), "gamma": option.gamma(), "vega": option.vega(),
@@ -95,9 +84,22 @@ print({"delta": option.delta(), "gamma": option.gamma(), "vega": option.vega(),
 result = option.pv_and_greeks()
 # result == {'pv': pv, 'delta': delta, 'gamma': gamma, 'vega': vega, 'theta': theta, 'rho': rho}
 ```
+
+再比如较为复杂的雪球结构，"敲出票息10%的一年期锁三103-80平敲雪球"，一样只需两行代码即可完成定价：
+```python
+from pricelib import *
+option = StandardSnowball(maturity=1, lock_term=3, s0=100, barrier_out=103,
+                          barrier_in=80, coupon_out=0.10, s=100, r=0.02,
+                          q=0.01, vol=0.16)
+print(option.price())  
+```
+这里的经典雪球会使用默认的PDE有限差分定价引擎。输入参数`s0=100, barrier_out=103, barrier_in=80`的价格是百分比形式，您也可以输入价格的绝对值，例如`s0=5535.40, barrier_out=5701.46, barrier_in=4428.32`，只要所有价格参数保持一致即可。
+
 对于雪球结构的PDE定价引擎，您可以获取有限差分的price、delta和gamma网格，进行绘图：
 ```python
 from pricelib.common.utilities import pde_plot
+# 这里的option是上面的StandardSnowball对象，其默认定价引擎是FdmSnowBallEngine
+pde_engine = option.engine
 # 绘制delta和gamma曲面图
 delta_matrix, s_vec = pde_engine.delta_matrix(status=StatusType.NoTouch)
 fig1 = pde_plot.draw_greeks_surface("delta", delta_matrix, 
@@ -344,11 +346,11 @@ https://api.galatech.com.cn/pyRisk/pyRisk_1.0.0_win10_x64.zip
 │  │  ├─autocallable 自动赎回
 │  │  └─accurals 累计期权
 │  └─pricing_engines 定价引擎
-│     ├─analyticalengines 解析解
-│     ├─fdmengines PDE有限差分法
-│     ├─integralengines 数值积分法
-│     ├─mcengines 蒙特卡洛模拟
-│     └─treeengines 树方法
+│     ├─analytic_engines 解析解
+│     ├─fdm_engines PDE有限差分法
+│     ├─integral_engines 数值积分法
+│     ├─mc_engines 蒙特卡洛模拟
+│     └─tree_engines 树方法
 ├─tests 测试
 ├─setup.py 安装配置文件
 ├─.flake8 静态代码检查配置文件
