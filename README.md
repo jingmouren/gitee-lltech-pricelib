@@ -95,6 +95,12 @@ print(option.price())
 ```
 这里的经典雪球会使用默认的PDE有限差分定价引擎。输入参数`s0=100, barrier_out=103, barrier_in=80`的价格是百分比形式，您也可以输入价格的绝对值，例如`s0=5535.40, barrier_out=5701.46, barrier_in=4428.32`，只要所有价格参数保持一致即可。
 
+> #### 常见问题QA
+> 1. Q: 我使用上述简易定价接口设置了r和vol，没有定价成功，为什么呢？
+> * A: 目前实例化产品的时候，您需要输入s、r、q、vol全部4个参数，才能自动创建默认的定价引擎。如果不需要分红率，您可以输入q=0。参数s指的是估值时的标的价格，与期初价格s0不同，因此需要指定s参数。若您想获得期初估值，可以将s与s0设为相同的值。
+> 2. Q: 雪球的定价结果为什么与examples中的demo有微小差异呢？
+> * A: 日期设置在后文有详细介绍，雪球敲出观察日缺省时，会按照起始日和交易日历自动生成敲出观察日序列，估值日和起始日会默认使用今天的日期，这会对定价结果产生微小的影响。您需要用`set_evaluation_date(datetime.date(2022, 1, 5))`设置估值日、在实例化`StandardSnowball`时加上`start_date=datetime.date(2022, 1, 5)`设置起始日，计算结果才能完全一致。
+
 对于雪球结构的PDE定价引擎，您可以获取有限差分的price、delta和gamma网格，进行绘图：
 ```python
 from pricelib.common.utilities import pde_plot
