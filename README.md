@@ -52,6 +52,14 @@
 
 ## 3. 使用教程
 
+> * 如果您使用`pip install pricelib`安装，用jupyter notebook运行代码，当您想要查看类和函数的说明文档时，有两种方式（以`StandardSnowball`为例）：
+>   * 方法1：在jupyter notebook的一个空白代码块中，输入`?StandardSnowball`，然后运行。
+>   * 方法2：将光标移动到`StandardSnowball`上面，按`Shift + Tab`，弹出文档，右上角的`^`和`+`会展开更多文档。
+> * 如果您使用`pip install -e .`本地安装，用Pycharm运行代码，当您想要查看类和函数的说明文档时，有两种方式：
+>   * 方法1：将鼠标悬停在`StandardSnowball`上面，Pycharm会自动弹出文档。
+>   * 方法2：可以按住`Ctrl`然后鼠标左键点击`StandardSnowball`，即可自动跳转，查看源码和注释。
+> * 教程篇幅有限，您可以在`examples`文件夹浏览详细的示例代码。如果您想了解产品类详情，可以在`pricelib/products`文件夹中查看对应产品的说明，每个产品的说明都详细介绍了所有输入参数，以及支持的定价引擎。
+
 ### 3.1 简易接口: 使用默认的定价引擎和BSM模型，快速实现定价
 
 只需两行代码，创建`产品结构`，然后调用`price`方法，即可完成定价。 以美式期权为例：
@@ -201,7 +209,7 @@ price_mc = option.price()
 option.set_pricing_engine(pde_engine)
 price_pde = option.price()
 ```
-调用期权产品的price()方法，即可实现定价。各个衍生品结构的不同定价方法的使用示例，详见 https://gitee.com/lltech/pricelib 的 examples。
+调用期权产品的price()方法，即可实现定价。各个衍生品结构的不同定价方法的使用示例，详见 https://gitee.com/lltech/pricelib/examples 中的demo。
 
 定价引擎支持的波动率模型具体如下:
 
