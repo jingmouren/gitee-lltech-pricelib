@@ -376,7 +376,20 @@ https://api.galatech.com.cn/pyRisk/pyRisk_1.0.0_win10_x64.zip
 
 ## 6. 项目依赖
 
-支持的Python解释器版本及第三方库详见setup.py文件
+支持的Python解释器: Python 3.8及以上版本。
+
+必须安装以下计算依赖项：
+- numpy>=1.24.1
+- pandas>=2.0.3
+- numba>=0.57.1
+- scipy>=1.8.0
+- importlib-metadata>=6.8.0
+
+可选安装以下绘图依赖项：
+- matplotlib>=3.5.3, <=3.7.5
+- plotly>=5.16.1
+
+具体详见setup.py文件。
 
 ## 7. 静态代码检查与单元测试
 

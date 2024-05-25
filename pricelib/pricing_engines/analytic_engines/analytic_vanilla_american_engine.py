@@ -97,7 +97,7 @@ class AnalyticVanillaAmEngine(AnalyticEngine):
         return self.prod.callput.value * (
                 S * math.exp(-self.q * self.T) * norm.cdf(self.prod.callput.value * self.d1(S))
                 - self.prod.strike * math.exp(-self.r * self.T) * norm.cdf(
-                    self.prod.callput.value * self.d2(S)))
+            self.prod.callput.value * self.d2(S)))
 
     # pylint: disable=invalid-name, missing-docstring
     def _BAW_1987(self):
@@ -110,31 +110,40 @@ class AnalyticVanillaAmEngine(AnalyticEngine):
         def cal_S_star(S):
             LHS = self.prod.callput.value * (S - self.prod.strike)
             RHS = self.BSM_value(S) + A(S)
-            if abs(LHS - RHS) / self.prod.strike < 0.0001:
-                return S
-
-            nom_b_1 = self.prod.callput.value * math.exp(-self.q * self.T) * norm.cdf(
-                self.prod.callput.value * self.d1(S)) * (1 - 1 / self.q_star)
-            nom_b_2 = (1 - self.prod.callput.value * math.exp(-self.q * self.T) * norm.cdf(
-                self.prod.callput.value * self.d1(S)) / (
-                               self.vol * math.sqrt(self.T))) / self.q_star
-            b = nom_b_1 + self.prod.callput.value * nom_b_2
-            S = (self.prod.strike + self.prod.callput.value * RHS - self.prod.callput.value * b * S) / (
-                    1 - self.prod.callput.value * b)
-            return cal_S_star(S)
+            n_iter = 0
+            while abs(LHS - RHS) / self.prod.strike > 1e-6 and n_iter < 100:
+                nom_b_1 = self.prod.callput.value * math.exp(-self.q * self.T) * norm.cdf(
+                    self.prod.callput.value * self.d1(S)) * (1 - 1 / self.q_star)
+                nom_b_2 = (1 - self.prod.callput.value * math.exp(-self.q * self.T) * norm.cdf(
+                    self.prod.callput.value * self.d1(S)) / (
+                                   self.vol * math.sqrt(self.T))) / self.q_star
+                b = nom_b_1 + self.prod.callput.value * nom_b_2
+                S = (self.prod.strike + self.prod.callput.value * RHS - self.prod.callput.value * b * S) / (
+                        1 - self.prod.callput.value * b)
+                LHS = self.prod.callput.value * (S - self.prod.strike)
+                RHS = self.BSM_value(S) + A(S)
+                n_iter += 1
+            return S
 
         M = 2 * self.r / self.vol ** 2
         N = 2 * (self.r - self.q) / self.vol ** 2
         K = 1 - math.exp(-self.r * self.T)
         self.q_star = (-(N - 1) + self.prod.callput.value * math.sqrt((N - 1) ** 2 + 4 * M / K)) * 0.5
-        S_star = self.prod.strike
-        S_star = cal_S_star(S_star)
+
+        s_inf = self.prod.strike / (1 - 2 / (N + 1 + self.prod.callput.value * ((N - 1) ** 2 + 4 * M) ** 0.5))
+        h = -((self.r - self.q) * self.T + self.prod.callput.value * 2 * self.vol * self.T ** 0.5) * (
+                self.prod.strike / (s_inf - self.prod.strike))
+
         if self.prod.callput == CallPut.Call:
+            S_star = self.prod.strike + (s_inf - self.prod.strike) * (1 - math.e ** h)
+            S_star = cal_S_star(S_star)
             if self.spot >= S_star:
                 return self.spot - self.prod.strike
             # else:
             return self.BSM_value(self.spot) + A(S_star) * (self.spot / S_star) ** self.q_star
         if self.prod.callput == CallPut.Put:
+            S_star = s_inf - (s_inf - self.prod.strike) * (1 - math.e ** h)
+            S_star = cal_S_star(S_star)
             if self.spot <= S_star:
                 return self.prod.strike - self.spot
             # else:
