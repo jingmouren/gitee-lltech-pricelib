@@ -160,8 +160,10 @@ class QuadSnowballEngine(QuadEngine):
                 # 如果敲入价是浮动的，调整敲入价
                 self.next_barrier_in = self.reversed_barrier_in[np.where(self.out_dates == j)[0][0]] if isinstance(
                     prod.barrier_in, (list, np.ndarray)) else prod.barrier_in
-                self.in_idx = np.where(self.s_vec <= self.next_barrier_in)[0][
-                    -1] if self.next_barrier_in > 0 else 0
+                if self.next_barrier_in > 0 and self.s_vec[0] <= self.next_barrier_in:
+                    self.in_idx = np.where(self.s_vec <= self.next_barrier_in)[0][-1]
+                else:
+                    self.in_idx = 0
 
             if prod.status == StatusType.NoTouch:
                 # 未敲入网格-敲入线下方的价值等于已敲入网格
@@ -229,7 +231,7 @@ class QuadSnowballEngine(QuadEngine):
             raise ValueError(f'敲出票息类型为{type(prod.coupon_out)}，仅支持int/float/list/np.ndarray，请检查')
 
         # in_idx：小于到期日敲入线的最大的标的价格索引。如果是变敲入雪球，此变量in_idx应该随敲入价动态调整。
-        if self.next_barrier_in > 0 and s_vec[0] < self.next_barrier_in:
+        if self.next_barrier_in > 0 and s_vec[0] <= self.next_barrier_in:
             self.in_idx = np.where(s_vec <= self.next_barrier_in)[0][-1]
         else:
             self.in_idx = 0
