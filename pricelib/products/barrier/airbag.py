@@ -36,7 +36,7 @@ class Airbag(OptionBase, Observer):
             knockin_parti: float, 敲入的下跌参与率
             call_parti: float, 未敲入的看涨参与率
             reset_call_parti: float, 敲入的重置后看涨参与率
-            status: 敲入状态，StatusType枚举类，默认为NoTouch
+            status: 敲入状态，StatusType枚举类，默认为NoTouch未敲入未敲出，DownTouch为已敲入
             engine: 定价引擎，PricingEngine类
                     解析解: AnalyticAirbagEngine 由障碍与二元解析解(资产或无)组合而成，所以敲入的下跌参与率与重置后看涨参与率必须相等。
                                                 支持连续观察/离散观察(默认为每日观察)
@@ -105,6 +105,7 @@ class Airbag(OptionBase, Observer):
 
     @time_this
     def price(self, t=None, spot=None):
+        self.validate_parameters(t=t)
         if self.engine.engine_type == EngineType.PdeEngine:  # 接口特殊是因为PDE引擎兼容了单双边障碍
             price = self.engine.calc_present_value(prod=self, t=t, spot=spot, bound=(self.barrier, None),
                                                    rebate=(0, 0))

@@ -25,7 +25,7 @@ class StandardSnowball(AutocallableBase):
             coupon_out: float，敲出票息，百分比，年化
             coupon_div: float，红利票息，百分比，年化
             lock_term: int，锁定期，单位为月，锁定期内不触发敲出
-            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
+            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch未敲入未敲出，UpTouch为已敲出，DownTouch为已敲入
             engine: 定价引擎，PricingEngine类
                     蒙特卡洛: MCAutoCallableEngine
                     PDE: FdmSnowBallEngine

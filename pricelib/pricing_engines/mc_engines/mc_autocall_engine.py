@@ -26,9 +26,14 @@ class MCAutoCallEngine(McEngine):
         _maturity_business_days = prod.trade_calendar.business_days_between(calculate_date, prod.end_date)
         obs_dates = prod.obs_dates.count_business_days(calculate_date)
         obs_dates = np.array([num for num in obs_dates if num >= 0])
-        pay_dates = prod.pay_dates.count_calendar_days(calculate_date)
-        pay_dates = np.array([num / prod.annual_days.value for num in pay_dates if num >= 0])
+        # 支付日 - 计算起始日到支付日的天数，用于计算应支付的敲出收益
+        calculate_start_diff = (calculate_date - prod.start_date).days
+        pay_dates = prod.pay_dates.count_calendar_days(prod.start_date)
+        pay_dates = np.array([num / prod.annual_days.value for num in pay_dates if num >= calculate_start_diff])
         assert len(obs_dates) == len(pay_dates), f"Error: {prod}的观察日和付息日长度不一致"
+        # 支付日 - 计算估值日到支付日的天数，用于折现
+        pay_dates_tau = prod.pay_dates.count_calendar_days(calculate_date)
+        pay_dates_tau = np.array([num / prod.annual_days.value for num in pay_dates_tau if num >= 0])
         # 经过估值日截断列表，例如prod.barrier_out有22个，存续一年时估值，_barrier_out只有12个
         _barrier_out = prod.barrier_out[-len(obs_dates):].copy()
         _coupon_out = prod.coupon_out[-len(obs_dates):].copy()
@@ -55,11 +60,17 @@ class MCAutoCallEngine(McEngine):
         hold_payoff = ((self.n_path - np.sum(is_knock_out)) * prod.s0 * (prod.coupon_div * _maturity
                        + prod.margin_lvl) * self.process.interest.disc_factor(_maturity))
         # 敲出部分
+        # 敲出对应计息时长
         obs_to_pay = dict(zip(obs_dates, pay_dates))
         pay_dates_vec = np.vectorize(obs_to_pay.get)(knock_out_date[is_knock_out])
+        # 敲出对应折现时长
+        obs_to_pay_tau = dict(zip(obs_dates, pay_dates_tau))
+        pay_dates_tau_vec = np.vectorize(obs_to_pay_tau.get)(knock_out_date[is_knock_out])
+        # 敲出对应票息
         obs_to_coupon = dict(zip(obs_dates, _coupon_out))
         coupon_out = np.vectorize(obs_to_coupon.get)(knock_out_date[is_knock_out])
+        # 敲出部分的收益
         knock_out_payoff = np.sum(prod.s0 * (coupon_out * pay_dates_vec + prod.margin_lvl)
-                                  * self.process.interest.disc_factor(pay_dates_vec))
+                                  * self.process.interest.disc_factor(pay_dates_tau_vec))
         value = (hold_payoff + knock_out_payoff) / self.n_path
         return value

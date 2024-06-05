@@ -15,7 +15,7 @@ class QuadSnowballEngine(QuadEngine):
     只支持不是仅到期观察敲入的结构 (只有到期观察敲入的结构，如FCN、DCN等另有更快的算法)
     支持变敲出、变敲入、变票息等要素可变型雪球结构"""
 
-    def __init__(self, stoch_process=None, quad_method=QuadMethod.Simpson, n_points=801, n_max=4, *,
+    def __init__(self, stoch_process=None, quad_method=QuadMethod.Simpson, n_points=1301, *,
                  s=None, r=None, q=None, vol=None):
         """初始化数值积分法定价引擎
         Args:
@@ -29,7 +29,7 @@ class QuadSnowballEngine(QuadEngine):
             q: float，分红/融券率
             vol: float，波动率
         """
-        super().__init__(stoch_process, quad_method, n_points, n_max, s=s, r=r, q=q, vol=vol)
+        super().__init__(stoch_process, quad_method, n_points, s=s, r=r, q=q, vol=vol)
         # 以下为计算过程的中间变量
         self.prod = None  # Product产品对象
         self.obs_dates = None  # 根据估值日，将敲出观察日转化为List[int]，交易日期限
@@ -37,7 +37,6 @@ class QuadSnowballEngine(QuadEngine):
         self.diff_obs_pay_dates = None  # 观察日与付息日的差值，List[float]，年化自然日期限
         self.smax = None  # 价格网格上界，float
         self.smin = None  # 价格网格下界，float
-        self.sy_vec = None  # 价格格点(完整)，np.ndarray
         self.s_vec = None  # 价格格点(不含smax和smin)，np.ndarray
         self.dt = None  # 时间步长，float
         self.j_vec = None  # 时间格点向量，np.ndarray
@@ -51,8 +50,6 @@ class QuadSnowballEngine(QuadEngine):
         self.out_idxs = None
         self.in_idx = None
         self.itm = None
-        self.adj_upper_idx = None
-        self.adj_lower_idx = None
         self.next_coupon_out = None
         self.reversed_barrier_out = None
         self.reversed_barrier_in = None
@@ -77,8 +74,9 @@ class QuadSnowballEngine(QuadEngine):
         self.backward_steps = prod.trade_calendar.business_days_between(calculate_date, prod.end_date)
         obs_dates = prod.obs_dates.count_business_days(calculate_date)
         obs_dates = np.array([num for num in obs_dates if num >= 0])
-        pay_dates = prod.pay_dates.count_calendar_days(calculate_date)
-        self.pay_dates = np.array([num / prod.annual_days.value for num in pay_dates if num >= 0])
+        calculate_start_diff = (calculate_date - prod.start_date).days
+        pay_dates = prod.pay_dates.count_calendar_days(prod.start_date)
+        self.pay_dates = np.array([num / prod.annual_days.value for num in pay_dates if num >= calculate_start_diff])
         assert len(obs_dates) == len(self.pay_dates), f"Error: {prod}的观察日和付息日长度不一致"
         self.diff_obs_pay_dates = np.array([(prod.pay_dates.date_schedule[i] - prod.obs_dates.date_schedule[i]).days
                                             for i in range(len(obs_dates))]) / prod.annual_days.value
@@ -89,10 +87,10 @@ class QuadSnowballEngine(QuadEngine):
         vol = self.process.vol(_maturity, spot)
         self._check_method_params()
         self.set_quad_params(r=r, q=q, vol=vol)
-        self.smax = self.n_max * spot
-        self.smin = 0.0001
-        self.sy_vec = np.linspace(self.smin, self.smax, self.n_points)
-        self.s_vec = self.sy_vec[1:-1].copy()
+        # 初始化fft的对数价格向量及边界的对数价格向量
+        self.init_grid(spot, vol, self.backward_steps / prod.t_step_per_year)
+
+        self.s_vec = np.exp(self.ln_s_vec)
         self.dt = 1 / prod.t_step_per_year
         self.j_vec = np.linspace(0, self.backward_steps, self.backward_steps + 1)  # 生成时间格点
         self.v_not_in = np.zeros(shape=(self.n_points, self.backward_steps + 1))
@@ -111,77 +109,69 @@ class QuadSnowballEngine(QuadEngine):
             np.diff(np.append(np.zeros((1,)), self.out_dates[::-1])).astype(int))  # 计息时间数
         self.next_diff_obspaydate = np.append(self.next_diff_obspaydate[0],
                                               self.next_diff_obspaydate)  # 每个交易日对应的下一个敲出观察日对应的付息日与观察日的自然日年化之差
+        # 初始化票息支付日
+        self.next_paydate = self.pay_dates.repeat(
+            np.diff(np.append(np.zeros((1,)), self.out_dates[::-1])).astype(int))  # 计息时间数
+        self.next_paydate = np.append(self.pay_dates[0], self.next_paydate)  # 每个交易日对应的下一个敲出观察日对应的付息日
 
         # 设置期末价值状态
         self._init_terminal_condition(self.s_vec, _maturity)
-        # 最近一次敲出观察日的已敲入矩阵价格
-        days_to_last_knock_out_day = 0  # 距离最近一次敲出观察的天数
-        knock_out_payoff = [self.next_coupon_out * _maturity]
-        # 初始化已敲入、未敲入的边界条件
-        self._init_boundary_condition(self.smax, _maturity)
-        # 最近一次敲出观察日的已敲入矩阵价格
-        last_v_knock_in = self.v_knock_in[1: self.adj_upper_idx, -1]
-        for j in range(self.backward_steps - 1, 0, -1):
-            days_to_last_knock_out_day += 1
-            x_not_in = self.s_vec[self.in_idx:]
-            x_in = self.sy_vec[1:self.adj_upper_idx]
-            v_not_in = self.v_not_in[:, j + 1]
-            v_in = self.v_knock_in[:, j + 1]
 
-            if prod.status == StatusType.NoTouch:  # 未敲入
-                self.v_not_in[(1 + self.in_idx):-1, j] = self.step_backward(x_not_in, self.sy_vec, v_not_in, self.dt)
-            # 如果敲出payoff全部相同，即没有看涨call，只有敲出票息，则可以用Vmb简化计算
-            if np.any(knock_out_payoff != knock_out_payoff[0]):
-                self.v_knock_in[(1 + self.adj_lower_idx):, j] = self.step_backward(
-                    self.sy_vec[(1 + self.adj_lower_idx):],
-                    self.sy_vec, v_in,
-                    self.dt)
-            else:  # 如果敲出payoff全部相同，即没有看涨call，只有敲出票息，则可以用Vmb简化计算
-                # 只需计算敲出线下方的点
-                x_in_adjusted = self.sy_vec[(1 + self.adj_lower_idx):self.adj_upper_idx]
-                self.v_knock_in[(1 + self.adj_lower_idx):self.adj_upper_idx, j] = (
-                        self.step_backward(x_in_adjusted, x_in, last_v_knock_in,
-                                           self.dt * days_to_last_knock_out_day) + self.Vmb(x_in_adjusted,
-                                           self.smax * self.adj_upper_idx / self.n_points, 1,
-                                           self.dt * days_to_last_knock_out_day) *
-                                           knock_out_payoff[0])
+        if 0 in self.out_dates:
+            # 如果估值日就是敲出观察日
+            j = 0
+            # 如果敲出价是浮动的，调整敲出价
+            start_barrier_out = (self.reversed_barrier_out[np.where(self.out_dates == j)[0][0]]
+                                     if isinstance(prod.barrier_out, (list, np.ndarray)) else prod.barrier_out)
+            if spot >= start_barrier_out:  # 发生敲出
+                # 如果敲出票息是浮动的，调整敲出票息
+                start_coupon_out = (self.reversed_coupon_out[np.where(self.out_dates == j)[0][0]]
+                                        if isinstance(prod.coupon_out, (list, np.ndarray)) else prod.coupon_out)
+                start_t = 1 if prod.trigger else self.next_paydate[j]
+                return np.where(spot - prod.strike_call > 0, (spot - prod.strike_call) * prod.parti_out, 0) + (
+                        prod.margin_lvl + start_coupon_out * start_t) * prod.s0 * self.process.interest.disc_factor(
+                    self.next_paydate[j], self.next_paydate[j] - self.next_diff_obspaydate[j])
+
+        for j in range(self.backward_steps - 1, 0, -1):
+            # 未敲入网格更新
+            if prod.status == StatusType.NoTouch:
+                self.v_not_in[:, j] = self.fft_step_backward(self.ln_s_vec, self.ln_s_vec,
+                                                             self.v_not_in[:, j + 1], self.dt)
+            # 已敲入网格更新
+            self.v_knock_in[:, j] = self.fft_step_backward(self.ln_s_vec, self.ln_s_vec,
+                                                           self.v_knock_in[:, j + 1], self.dt)
 
             if j in self.out_dates:
                 coupon_t = 1 if prod.trigger else self.next_paydate[j]
                 # 如果敲出价是浮动的，调整敲出价
                 self.next_barrier_out = (self.reversed_barrier_out[np.where(self.out_dates == j)[0][0]]
                                          if isinstance(prod.barrier_out, (list, np.ndarray)) else prod.barrier_out)
-                self.out_idxs = 1 + np.array(np.where(self.s_vec >= self.next_barrier_out)[0])
-                self.adj_upper_idx = int(self.n_points / self.n_max * (self.next_barrier_out / prod.s0 + 0.25))
+                self.out_idxs = np.array(np.where(self.s_vec >= self.next_barrier_out)[0])
                 # 如果敲出票息是浮动的，调整敲出票息
                 self.next_coupon_out = (self.reversed_coupon_out[np.where(self.out_dates == j)[0][0]]
                                         if isinstance(prod.coupon_out, (list, np.ndarray)) else prod.coupon_out)
-                # 修改敲出边界条件
-                knock_out_payoff = self.itm[self.out_idxs - 1] + (
+                # 发生敲出的payoff
+                knock_out_payoff = self.itm[self.out_idxs] + (
                     prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0 * self.process.interest.disc_factor(
                     self.next_paydate[j], self.next_paydate[j] - self.next_diff_obspaydate[j])
+                # 用knock_out_payoff覆盖敲出价上方的衍生品价值
                 self.v_not_in[self.out_idxs, j] = self.v_knock_in[self.out_idxs, j] = knock_out_payoff
 
                 # 如果敲入价是浮动的，调整敲入价
                 self.next_barrier_in = self.reversed_barrier_in[np.where(self.out_dates == j)[0][0]] if isinstance(
                     prod.barrier_in, (list, np.ndarray)) else prod.barrier_in
-                self.in_idx = 1 + np.where(self.s_vec <= self.next_barrier_in)[0][
+                self.in_idx = np.where(self.s_vec <= self.next_barrier_in)[0][
                     -1] if self.next_barrier_in > 0 else 0
 
-                last_v_knock_in = self.v_knock_in[1: self.adj_upper_idx, j]  # 最近一次敲出观察日的已敲入矩阵价格
-                days_to_last_knock_out_day = 0  # 距离最近一次敲出观察的天数
+            if prod.status == StatusType.NoTouch:
+                # 未敲入网格-敲入线下方的价值等于已敲入网格
+                self.v_not_in[:self.in_idx, j] = self.v_knock_in[:self.in_idx, j]
 
-            if prod.status == StatusType.NoTouch:  # 未敲入
-                # 考虑敲入的情况
-                self.v_not_in[(1 + self.adj_lower_idx):(self.in_idx + 1), j] = self.v_knock_in[
-                                                                               (1 + self.adj_lower_idx):(
-                                                                                       self.in_idx + 1), j]
-
-        x = np.array(spot)
+        x = np.array([np.log(spot)])
         if prod.status == StatusType.NoTouch:
-            value = self.step_backward(x, self.sy_vec, self.v_not_in[:, 1], self.dt)[0]
+            value = self.fft_step_backward(x, self.ln_s_vec, self.v_not_in[:, 1], self.dt)[0]
         else:
-            value = self.step_backward(x, self.sy_vec, self.v_knock_in[:, 1], self.dt)[0]
+            value = self.fft_step_backward(x, self.ln_s_vec, self.v_knock_in[:, 1], self.dt)[0]
         return value
 
     def _init_terminal_condition(self, s_vec, maturity):
@@ -238,13 +228,10 @@ class QuadSnowballEngine(QuadEngine):
         else:
             raise ValueError(f'敲出票息类型为{type(prod.coupon_out)}，仅支持int/float/list/np.ndarray，请检查')
 
-        # 为了避免积分法在s=0的边缘多次迭代后异常大，直接设定边缘附近的值
-        self.adj_lower_idx = int(self.n_points / self.n_max * 0.4)
-        self.adj_upper_idx = int(self.n_points / self.n_max * (self.next_barrier_out / prod.s0 + 0.25))
         # in_idx：小于到期日敲入线的最大的标的价格索引。如果是变敲入雪球，此变量in_idx应该随敲入价动态调整。
-        self.in_idx = 1 + np.where(s_vec <= self.next_barrier_in)[0][-1] if self.next_barrier_in > 0 else 0
+        self.in_idx = np.where(s_vec <= self.next_barrier_in)[0][-1] if self.next_barrier_in > 0 else 0
         # out_idxs：大于到期日敲出线的标的价格数组的索引。如果是变敲出雪球，此变量out_idxs应该随敲出价动态调整。
-        self.out_idxs = 1 + np.array(np.where(s_vec >= self.next_barrier_out)[0])
+        self.out_idxs = np.array(np.where(s_vec >= self.next_barrier_out)[0])
         # 虚值call在值度
         self.itm = np.where(s_vec - prod.strike_call > 0, (s_vec - prod.strike_call) * prod.parti_out, 0)
 
@@ -256,7 +243,7 @@ class QuadSnowballEngine(QuadEngine):
                                                   大于保底边界，支付到期价格与期初价之间价差；
                   如果到期大于敲出边界，大于看涨行权价，获得看涨收益、本金和票息；
                                     在敲出边界和看涨行权价之间，获得本金和票息"""
-        self.v_knock_in[1:-1, -1] = np.where(s_vec < self.next_barrier_out,
+        self.v_knock_in[:, -1] = np.where(s_vec < self.next_barrier_out,
                                              np.minimum(
                                                  np.where(s_vec <= prod.strike_lower, prod.strike_lower,
                                                           s_vec) -
@@ -274,7 +261,7 @@ class QuadSnowballEngine(QuadEngine):
                                   在敲入边界和看涨行权价之间，获得本金和票息
                                           如果在敲出边界和看涨行权价之间，获得本金和敲出票息
                                           如果在敲入边界和敲出边界之间，获得本金和红利票息"""
-        self.v_not_in[1:-1, -1] = np.where(s_vec <= self.next_barrier_in,
+        self.v_not_in[:, -1] = np.where(s_vec <= self.next_barrier_in,
                                            np.where(s_vec <= prod.strike_lower, prod.strike_lower, s_vec) -
                                            prod.strike_upper + prod.s0 * prod.margin_lvl,
                                            np.where(s_vec > prod.strike_call,
@@ -285,41 +272,3 @@ class QuadSnowballEngine(QuadEngine):
                                                          prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0,
                                                              (
                                                          prod.margin_lvl + prod.coupon_div * coupon_t) * prod.s0)))
-
-    def _init_boundary_condition(self, smax, maturity):
-        """初始化边界条件
-        考虑到了保底、OTM、保证金/纯期权模式、以及敲出边界上方增加虚值call(增强型)
-        Args:
-            smax: float, 标的价格上界
-            maturity: float, 到期时间，年化自然日期限
-        Returns: None
-        """
-        prod = self.prod
-        # 矩阵第一行: 标的价格为0时结构的价值
-        t_vec = self.dt * self.j_vec
-        interest_maturity_discount_factor = self.process.interest.disc_factor(maturity, t_vec)
-        div_maturity_discount_factor = self.process.div.disc_factor(maturity, t_vec)
-
-        # 由看涨看跌平价 call-put=S*exp(-qt)-K*exp(-rt)，S=0时call=0，put=K*exp(-rt)
-        for i in range(self.adj_lower_idx + 1):
-            self.v_not_in[i, :] = self.v_knock_in[i, :] = ((prod.margin_lvl * prod.s0 - prod.strike_upper
-                                                            + prod.strike_lower) * interest_maturity_discount_factor)
-            if self.sy_vec[i] > prod.strike_lower:
-                self.v_knock_in[i, :] += self.sy_vec[i] * div_maturity_discount_factor
-                self.v_not_in[i, :] = self.v_knock_in[i, :]
-
-        # 矩阵最后一行: 每一个观察日前，股价上界能得到的本金加票息贴现
-        self.next_paydate = self.pay_dates.repeat(
-            np.diff(np.append(np.zeros((1,)), self.out_dates[::-1])).astype(int))  # 计息时间数
-        self.next_paydate = np.append(self.next_paydate[0], self.next_paydate)  # 每个交易日对应的下一个敲出观察日对应的付息日
-
-        # 触发器：上边界为绝对票息贴现/ 非触发器：上边界为年化票息贴现
-        coupon_t = 1 if prod.trigger else self.next_paydate
-        # 由看涨看跌平价 call-put = S*exp(-qt) - K*exp(-rt)，S=Smax时put=0，call = Smax*exp(-qt) - K*exp(-rt)
-        interest_next_paydate_discount_factor = self.process.interest.disc_factor(self.next_paydate, t_vec)
-        div_next_paydate_discount_factor = self.process.div.disc_factor(self.next_paydate, t_vec)
-        v_upper = (prod.parti_out * (self.smax * div_next_paydate_discount_factor
-                                     - prod.strike_call * interest_next_paydate_discount_factor)
-                   + (prod.margin_lvl + self.coupon_outs * coupon_t) * prod.s0
-                   * interest_next_paydate_discount_factor)
-        self.v_knock_in[-1, :] = self.v_not_in[-1, :] = v_upper

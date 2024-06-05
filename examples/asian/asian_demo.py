@@ -74,6 +74,6 @@ def run():
 
 
 if __name__ == '__main__':
+    print(lite())
     res_df = run()
     print(res_df)
-    print(lite())

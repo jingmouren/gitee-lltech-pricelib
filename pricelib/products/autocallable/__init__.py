@@ -5,7 +5,7 @@ Copyright (C) 2024 Galaxy Technologies
 Licensed under the Apache License, Version 2.0
 """
 from .autocall import AutoCall
-from .autocallable_base import AutocallableBase
+from .autocallable_base import AutocallableBase, PhoenixBase
 from .standard_snowball import StandardSnowball
 from .earlyprofit_snowball import EarlyProfitSnowball
 from .butterfly_snowball import ButterflySnowball

@@ -10,7 +10,7 @@ from pricelib import *
 
 def lite():
     """简易定价接口"""
-    option = FCN(maturity=2, lock_term=3, s0=100, barrier_out=100, barrier_in=80, coupon=0.00322,
+    option = FCN(maturity=2, lock_term=3, s0=100, barrier_out=103, barrier_in=80, coupon=0.00322,
                  s=100, r=0.02, q=0.04, vol=0.16)
     return option.pv_and_greeks()
 
@@ -29,12 +29,12 @@ def run():
     # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分、数值积分
     mc_engine = MCPhoenixEngine(process, n_path=100000, rands_method=RandsMethod.Pseudorandom,
                                 antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0)
-    quad_engine = QuadFCNEngine(process, quad_method=QuadMethod.Simpson, n_points=1591)
+    quad_engine = QuadFCNEngine(process, quad_method=QuadMethod.Simpson, n_points=1301)
     pde_engine = FdmPhoenixEngine(process, s_step=800, n_smax=2, fdm_theta=1)
 
     # 4. 定义产品：FCN(Fixed Coupon Note固定派息票据)
     option = FCN(maturity=2, s0=100, start_date=datetime.date(2022, 1, 4), trade_calendar=CN_CALENDAR,
-                 barrier_out=100, barrier_in=80, strike_upper=None, coupon=0.00322, lock_term=3,
+                 barrier_out=103, barrier_in=80, strike_upper=None, coupon=0.00322, lock_term=3,
                  engine=None, status=StatusType.NoTouch, t_step_per_year=243)
 
     # 5.为产品设置定价引擎
@@ -54,8 +54,8 @@ def run():
 
 
 if __name__ == '__main__':
+    print(lite())
     res, greeks = run()
     for k, v in res.items():
         print(f'{k}: {v}')
     print(greeks)
-    print(lite())

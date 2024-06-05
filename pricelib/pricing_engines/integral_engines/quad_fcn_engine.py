@@ -6,7 +6,6 @@ Licensed under the Apache License, Version 2.0
 """
 import numpy as np
 from pricelib.common.pricing_engine_base import QuadEngine
-from pricelib.common.utilities.patterns import HashableArray
 from pricelib.common.time import global_evaluation_date
 
 
@@ -27,7 +26,7 @@ class QuadFCNEngine(QuadEngine):
         _maturity_business_days = prod.trade_calendar.business_days_between(calculate_date,
                                                                             prod.end_date) / prod.t_step_per_year
         obs_dates = prod.obs_dates.count_business_days(calculate_date)
-        obs_dates = np.array([num for num in obs_dates if num >= 0])
+        obs_dates = np.array([num for num in obs_dates if num >= 0]) / prod.t_step_per_year
         # 经过估值日截断的列表，例如prod.barrier_out有22个，存续一年时估值，_barrier_out只有12个
         _barrier_out = prod.barrier_out[-len(obs_dates):].copy()
         _barrier_in = prod.barrier_in[-len(obs_dates):].copy()
@@ -39,34 +38,47 @@ class QuadFCNEngine(QuadEngine):
         r = self.process.interest(_maturity)
         q = self.process.div(_maturity)
         vol = self.process.vol(_maturity, spot)
-        self.backward_steps = obs_dates.size
         self._check_method_params()
         self.set_quad_params(r=r, q=q, vol=vol)
-        upper_barrier = self.n_max * prod.s0
-        lower_barrier = 1
-        s_vec = HashableArray(np.linspace(lower_barrier, upper_barrier, self.n_points))
-        v_grid = np.zeros(shape=(self.n_points, self.backward_steps + 1))
+        if obs_dates[0] == 0:
+            # 如果估值日就是敲出观察日
+            if spot >= _barrier_out[0]:  # 发生敲出
+                return (prod.margin_lvl + _coupon[0]) * prod.s0
+            else:  # 没有发生敲出，则积分迭代步数少一次
+                s0_dt = obs_dates[1]
+                dt_vec = np.diff(obs_dates)[1:]
+        else:
+            s0_dt = obs_dates[0]
+            dt_vec = np.diff(obs_dates)
+
+        backward_steps = dt_vec.size
+        # 初始化fft的对数价格向量及边界的对数价格向量
+        self.init_grid(spot, vol, _maturity_business_days)
+        s_vec = np.exp(self.ln_s_vec)
+
+        v_grid = np.zeros(shape=(self.n_points, backward_steps + 2))
 
         barrier_out_idx = np.searchsorted(s_vec, _barrier_out, side='right')
         barrier_yield_idx = np.searchsorted(s_vec, _barrier_yield, side='right')
-        dt = _maturity_business_days / self.backward_steps
 
-        for step in range(self.backward_steps, 0, -1):
-            if step == self.backward_steps:  # 设置期末价值状态: 预付金 + 派息 + 到期敲入或有亏损
+        for step in range(backward_steps + 1, 0, -1):
+            if step == backward_steps + 1:  # 设置期末价值状态: 预付金 + 派息 + 到期敲入或有亏损
                 v_grid[:, -1] = (prod.margin_lvl * prod.s0 +
                                  np.where(s_vec >= _barrier_yield[-1], _coupon[-1] * prod.s0, 0) +
                                  np.where(s_vec >= _barrier_in[-1], 0, prod.parti_in * (- prod.strike_upper +
                                           np.where(s_vec > prod.strike_lower, s_vec, prod.strike_lower))))
             else:
                 # 数值积分，计算前一个敲出观察日的期权价值
-                v_grid[:, step] = self.step_backward(s_vec, s_vec, v_grid[:, step + 1], dt)
+                v_grid[:, step] = self.fft_step_backward(self.ln_s_vec, self.ln_s_vec,
+                                                         v_grid[:, step + 1], dt_vec[step - 1])
                 # 敲出价之上，发生敲出，返还预付金 + 派息
                 v_grid[barrier_out_idx[step - 1]:, step] = (prod.margin_lvl + _coupon[step - 1]) * prod.s0
                 # 派息线之上，敲出价之下，派息
                 v_grid[barrier_yield_idx[step - 1]:barrier_out_idx[step - 1], step] += _coupon[step - 1] * prod.s0
                 # 派息线之下，不派息
 
-        y = s_vec
-        x = HashableArray(np.array(spot))
-        value = self.step_backward(x, y, v_grid[:, 1], dt)[0]
+        x = np.array([np.log(spot)])
+        value = self.fft_step_backward(x, self.ln_s_vec, v_grid[:, 1], s0_dt)[0]
+        if obs_dates[0] == 0:  # 如果估值日就是敲出观察日，并且spot位于派息线上、敲出线下，则需要加上派息的价值
+            value += _coupon[0] * prod.s0
         return value

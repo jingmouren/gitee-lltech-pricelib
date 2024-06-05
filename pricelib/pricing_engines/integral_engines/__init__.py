@@ -11,6 +11,7 @@ from .quad_portfolio_engine import *
 from .quad_autocall_engine import *
 from .quad_snowball_engine import *
 from .quad_fcn_engine import *
+from .quad_double_shark_engine import *
 
 __all__ = ['QuadVanillaEngine', 'QuadBarrierEngine', 'QuadDigitalEngine', 'QuadPortfolioEngine',
-           'QuadAutoCallEngine', 'QuadSnowballEngine', 'QuadFCNEngine', ]
+           'QuadAutoCallEngine', 'QuadSnowballEngine', 'QuadFCNEngine', 'QuadDoubleSharkEngine']

@@ -37,53 +37,37 @@ class QuadDigitalEngine(QuadEngine):
         # 设置积分法engine参数
         self.set_quad_params(r=r, q=q, vol=vol)
 
-        upper_barrier = self.n_max * spot
-        lower_barrier = 1
-        s_vec = np.linspace(lower_barrier, upper_barrier, self.n_points)
+        # 初始化fft的对数价格向量及边界的对数价格向量
+        self.init_grid(spot, vol, tau)
         # 行权价在价格格点上的对应格点
-        strike_point = np.where(s_vec >= prod.strike)[0][0]
+        strike_point = np.where(np.exp(self.ln_s_vec) >= prod.strike)[0][0]
+        v_vec = np.zeros(len(self.ln_s_vec))
+        if prod.callput == CallPut.Call:
+            v_vec[strike_point:] = prod.rebate
+        elif prod.callput == CallPut.Put:
+            v_vec[:strike_point] = prod.rebate
         # 欧式：
         if prod.exercise_type == ExerciseType.European:
-            v_grid = np.zeros(self.n_points)
-            if prod.callput == CallPut.Call:
-                v_grid[strike_point:] = prod.rebate
-            elif prod.callput == CallPut.Put:
-                v_grid[:strike_point] = prod.rebate
-            y = s_vec
-            x = np.array(spot)
-            value = self.step_backward(x, y, v_grid, tau)[0]
+            value = self.fft_step_backward(np.log(np.array([spot])), self.ln_s_vec, v_vec, tau)[0]
         # 美式：
         elif prod.exercise_type == ExerciseType.American:
-            v_grid = np.zeros(shape=(self.n_points, self.backward_steps + 1))
-            s_vec = np.tile(s_vec, reps=(self.backward_steps + 1, 1)).T
-
-            if prod.callput == CallPut.Call:
-                v_grid[strike_point:, -1] = prod.rebate
-            elif prod.callput == CallPut.Put:
-                v_grid[:strike_point, -1] = prod.rebate
-
             for step in range(self.backward_steps - 1, 0, -1):
-                y = s_vec[:, step + 1]
-
+                if prod.payment_type == PaymentType.Hit:
+                    rebate_v = prod.rebate
+                elif prod.payment_type == PaymentType.Expire:
+                    rebate_v = prod.rebate * math.exp(-r * dt * (self.backward_steps - step))
+                else:
+                    raise ValueError("Invalid payment type")
                 if prod.callput == CallPut.Call:
-                    x = s_vec[:strike_point, step]
-                    v_grid[:strike_point, step] = self.step_backward(x, y, v_grid[:, step + 1], dt)
-                    if prod.payment_type == PaymentType.Hit:
-                        v_grid[strike_point:, step] = prod.rebate
-                    elif prod.payment_type == PaymentType.Expire:
-                        v_grid[strike_point:, step] = prod.rebate * math.exp(-r * dt * (self.backward_steps - step))
-
+                    v_vec[:strike_point] = self.fft_step_backward(self.ln_s_vec[:strike_point], self.ln_s_vec, v_vec, dt)
+                    v_vec[strike_point:] = rebate_v
                 elif prod.callput == CallPut.Put:
-                    x = s_vec[strike_point:, step]
-                    v_grid[strike_point:, step] = self.step_backward(x, y, v_grid[:, step + 1], dt)
-                    if prod.payment_type == PaymentType.Hit:
-                        v_grid[:strike_point, step] = prod.rebate
-                    elif prod.payment_type == PaymentType.Expire:
-                        v_grid[:strike_point, step] = prod.rebate * math.exp(-r * dt * (self.backward_steps - step))
+                    v_vec[strike_point:] = self.fft_step_backward(self.ln_s_vec[strike_point:], self.ln_s_vec, v_vec, dt)
+                    v_vec[:strike_point] = rebate_v
+                else:
+                    raise ValueError("Invalid call put type")
 
-            y = s_vec[:, 1]
-            x = np.array(spot)
-            value = self.step_backward(x, y, v_grid[:, 1], dt)[0]
+            value = self.fft_step_backward(np.array(np.log([spot])), self.ln_s_vec, v_vec, dt)[0]
         else:
             raise ValueError("ExerciseType must be American or European")
         return value

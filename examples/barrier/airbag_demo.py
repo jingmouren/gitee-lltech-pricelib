@@ -79,7 +79,7 @@ def run():
 
 
 if __name__ == '__main__':
+    print(lite())
     dfa, dfb = run()
     print(dfa)
     print(dfb)
-    print(lite())

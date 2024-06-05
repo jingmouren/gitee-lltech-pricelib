@@ -36,7 +36,7 @@ def run():
     an_engine = AnalyticBarrierEngine(process)
     mc_engine = MCBarrierEngine(process, n_path=100000, rands_method=RandsMethod.LowDiscrepancy,
                                 antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0)
-    quad_engine = QuadBarrierEngine(process, quad_method=QuadMethod.Trapezoid, n_points=801, n_max=4)
+    quad_engine = QuadBarrierEngine(process, quad_method=QuadMethod.Trapezoid, n_points=4001)
     bitree_engine = BiTreeBarrierEngine(process, tree_branches=500)
     pde_engine = FdmBarrierEngine(process, s_step=800, n_smax=2, fdm_theta=1)
 
@@ -87,7 +87,8 @@ def run():
                                  price_an_discrete, price_mc, price_quad, price_tree, price_pde_discrete])
         results_continuous.append([barrier_price, str(option_continuous),
                                    price_an_continuous, price_pde_continuous])
-
+    print(results_discrete)
+    print(results_continuous)
     df1 = pd.DataFrame(results_discrete,
                        columns=['障碍价', '障碍期权', '闭式解(每日观察)', 'MonteCarlo', 'Quadrature', '二叉树', 'PDE'])
     df2 = pd.DataFrame(results_continuous, columns=['障碍价', '障碍期权', '闭式解(连续观察)', 'PDE'])
@@ -95,8 +96,8 @@ def run():
 
 
 if __name__ == '__main__':
+    print(lite())
     pd.set_option('display.max_columns', None)
     dfa, dfb = run()
     print(dfa)
     print(dfb)
-    print(lite())

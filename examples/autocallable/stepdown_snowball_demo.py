@@ -29,7 +29,7 @@ def run():
     # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分、数值积分
     mc_engine = MCAutoCallableEngine(process, n_path=100000, rands_method=RandsMethod.Pseudorandom,
                                      antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0)
-    quad_engine = QuadSnowballEngine(process, quad_method=QuadMethod.Simpson, n_points=601, n_max=2)
+    quad_engine = QuadSnowballEngine(process, quad_method=QuadMethod.Simpson, n_points=1301)
     pde_engine = FdmSnowBallEngine(process, s_step=800, n_smax=2, fdm_theta=1)
 
     # 4. 定义产品：降敲雪球
@@ -51,12 +51,13 @@ def run():
     price_quad = option.price()
 
     results = {"结构": str(option), "MonteCarlo": price_mc, "PDE": price_pde, "Quadrature": price_quad}
+    print(results)
     return results, pde_greeks
 
 
 if __name__ == '__main__':
+    print(lite())
     res, greeks = run()
     for k, v in res.items():
         print(f'{k}: {v}')
     print(greeks)
-    print(lite())

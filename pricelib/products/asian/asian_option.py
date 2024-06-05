@@ -77,6 +77,8 @@ class AsianOption(OptionBase):
         self.parti = parti
         self.enhanced = enhanced
         self.limited_price = limited_price
+        if enhanced:
+            assert limited_price is not None, "Error: 增强型亚式必须输入限定标的价格上/下限参数"
         assert strike is not None or substitute == AsianAveSubstitution.Strike, "Error: 替代平均结算价，必需输入执行价参数"
         self.strike = strike
         self.callput = callput
@@ -111,5 +113,6 @@ class AsianOption(OptionBase):
             spot: float，标的价格
         Returns: 期权现值
         """
+        self.validate_parameters(t=t)
         price = self.engine.calc_present_value(prod=self, t=t, spot=spot) * self.parti
         return price

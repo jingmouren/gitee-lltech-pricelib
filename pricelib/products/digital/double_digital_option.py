@@ -33,7 +33,7 @@ class DoubleDigitalOption(OptionBase, Observer):
             bound: (float, float), (低障碍价, 高障碍价)
             rebate: (float, float), 触碰payoff的绝对数值，非年化
                     双接触: (下边界payoff, 上边界payoff); 双不接触: (到期不接触的payoff, 无作用)
-            status: 定价时，触碰障碍的状态，StatusType枚举类，默认为NoTouch
+            status: 定价时，触碰障碍的状态，StatusType枚举类，默认为NoTouch未触碰，UpTouch为向上触碰，DownTouch为向下触碰
             engine: 定价引擎，PricingEngine类
                     解析解: AnalyticDoubleDigitalEngine - Hui(1996) 级数近似解，双接触期权的下边界payoff和上边界payoff必须相等
                                                         支持 连续/离散观察、到期支付的(美式)双接触/双不接触
@@ -124,6 +124,7 @@ class DoubleDigitalOption(OptionBase, Observer):
 
     @time_this
     def price(self, t=None, spot=None):
+        self.validate_parameters(t=t)
         if self.engine.engine_type == EngineType.PdeEngine:  # 接口特殊是因为PDE引擎兼容了单双边障碍
             price = self.engine.calc_present_value(prod=self, t=t, spot=spot, bound=self.bound, rebate=self.rebate)
         else:

@@ -37,6 +37,8 @@ class PricingEngineBase(metaclass=ABCMeta):
             dividend = ConstantRate(value=q, name="分红/融券率")
             volatility = BlackConstVol(vol, name="波动率")
             self.process = GeneralizedBSMProcess(spot=spot_price, interest=riskfree, div=dividend, vol=volatility)
+        elif not all(var is None for var in [s, r, q, vol]) and any(var is None for var in [s, r, q, vol]):
+            raise ValueError("构造定价引擎时，当前价格s、无风险利率r、分红/融券率q、波动率vol必须同时输入，才会创建默认定价引擎")
         else:
             self.process = None
             logging.warning(

@@ -29,14 +29,12 @@ class QuadPortfolioEngine(QuadEngine):
         vol = self.process.vol(tau, spot)
         self._check_method_params()
 
-        s_min = 0.01
-        s_max = self.n_max * spot
-        s_vec = np.linspace(s_min, s_max, self.n_points)
-        v_vec = np.zeros(s_vec.shape)
         # 设定期末价值
+        self.init_grid(spot, vol, tau)
+        v_vec = np.zeros(self.ln_s_vec.shape)
         for vanilla, position in prod.vanilla_list:
-            v_vec += np.maximum(vanilla.callput.value * (s_vec - vanilla.strike), 0) * position
+            v_vec += np.maximum(vanilla.callput.value * (np.exp(self.ln_s_vec) - vanilla.strike), 0) * position
         # 设置积分法engine参数
         self.set_quad_params(r=r, q=q, vol=vol)
-        # 逐步回溯计算
-        return self.step_backward(np.array(spot), s_vec, v_vec, tau)[0]
+        # 回溯计算
+        return self.fft_step_backward(np.log(np.array([spot])), self.ln_s_vec, v_vec, tau)[0]

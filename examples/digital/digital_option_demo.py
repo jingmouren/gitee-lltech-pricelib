@@ -37,7 +37,7 @@ def run():
     mc_engine = MCDigitalEngine(process, n_path=100000,
                                 rands_method=RandsMethod.Pseudorandom,
                                 antithetic_variate=False, ld_method=LdMethod.Halton, seed=0)
-    quad_engine = QuadDigitalEngine(process, quad_method=QuadMethod.Simpson, n_points=801, n_max=4)
+    quad_engine = QuadDigitalEngine(process, quad_method=QuadMethod.Simpson, n_points=2001)
     bitree_engine = BiTreeDigitalEngine(process, tree_branches=500)
     pde_engine = FdmDigitalEngine(process, s_step=800, n_smax=2, fdm_theta=1)
 
@@ -98,7 +98,7 @@ def run():
 
 
 if __name__ == '__main__':
+    print(lite())
     df1, df2 = run()
     print(df1)
     print(df2)
-    print(lite())

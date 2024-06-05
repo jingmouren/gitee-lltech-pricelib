@@ -4,7 +4,6 @@
 Copyright (C) 2024 Galaxy Technologies
 Licensed under the Apache License, Version 2.0
 """
-from functools import lru_cache
 from enum import Enum, unique
 import numpy as np
 from scipy.interpolate import interp1d
@@ -65,7 +64,6 @@ class RateTermStructure(Observable):
         t0是起始日，fn是rate关于时间的函数"""
         return cls(t0, fn)
 
-    @lru_cache(maxsize=None)
     def __call__(self, t):
         """返回指定时间t对应的rate，t可以是float或numpy.arrays"""
         return self.__fn_rate(t)
@@ -124,7 +122,6 @@ class DiscountCurve:
         t0是起始日，fn是折现因子函数"""
         return cls(t0, fn)
 
-    @lru_cache(maxsize=None)
     def __call__(self, t, dt=3e-3):
         """经过差分计算，泰勒展开e^x-1=x，得到的t处利率rt
         其中self(t)：t处的折现因子exp(-rt), dt=3e-3约等于1/365，即一个自然日

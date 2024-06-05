@@ -106,13 +106,14 @@ def draw_greeks_curve(delta_matrix, gamma_matrix=None, t=0, spot_range=None, sho
     return fig
 
 
-def draw_greeks_contour(greeks_matrix, barrier_in, high_value=1.2, low_value=0.01):
+def draw_greeks_contour(greeks_matrix, barrier_in, high_value=1.2, low_value=0.01, title=None):
     """绘制greeks等高线
     Args:
         greeks_matrix: np.ndarray, 希腊值二维数组，行代表价格，列代表时间
         barrier_in: int, barrier_in是敲入价索引
         high_value: float, greeks的上限
         low_value: float, greeks的下限
+        title: str, 图表标题
     Returns: None
     """
     # 绘制Delta等高线图
@@ -131,10 +132,12 @@ def draw_greeks_contour(greeks_matrix, barrier_in, high_value=1.2, low_value=0.0
     plt.contour(greeks_matrix, levels=[low_value, ], colors='royalblue')
     plt.xlabel('Days')
     plt.ylabel('Price')
-    plt.title(f'两年期锁3平敲雪球理论Delta区间: {low_value}-{high_value}')
+    if title is None:
+        title = f'雪球理论Delta区间: {low_value}-{high_value}'
+    plt.title(title)
     # 创建虚拟线条对象用于图例
-    high_line = mlines.Line2D([], [], color='orange', label='Delta=1.2')
-    low_line = mlines.Line2D([], [], color='royalblue', label='Delta=0.01')
+    high_line = mlines.Line2D([], [], color='orange', label=f'Delta={high_value}')
+    low_line = mlines.Line2D([], [], color='royalblue', label=f'Delta={low_value}')
     plt.legend(handles=[high_line, low_line])
     # 控制y轴范围
     plt.ylim(barrier_in, 120)

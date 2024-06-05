@@ -2,7 +2,7 @@
 
 ## 1. 项目简介
 
-本项目是一个使用Python语言编写的开源金融衍生品定价引擎库，包含多种定价方法，涵盖了国内场外衍生品市场主流的权益类衍生品结构。定价方法方面，本定价库支持解析解、Monte Carlo模拟法、PDE有限差分法、数值积分法以及树方法；波动率模型方面，本定价库支持常数波动率模型、局部波动率模型、Heston随机波动率模型。
+本项目是一个使用Python语言编写的开源金融衍生品定价引擎库，包含多种定价方法，涵盖了国内场外衍生品市场主流的权益类衍生品结构。定价方法方面，本定价库支持解析解、Monte Carlo模拟法、PDE有限差分法、FFT数值积分法以及树方法；波动率模型方面，本定价库支持常数波动率模型、局部波动率模型、Heston随机波动率模型。
 
 基于国内场外衍生品市场发展的现状，市场对自动赎回结构(Autocallable)，尤其是各种类型的雪球、凤凰结构的定价有更大的需求。本定价库立足于国内市场需求，支持多种雪球变种和凤凰结构的定价，具体如下：
 
@@ -94,6 +94,7 @@ result = option.pv_and_greeks()
 ```
 
 再比如较为复杂的雪球结构，"敲出票息10%的一年期锁三103-80平敲雪球"，一样只需两行代码即可完成定价：
+
 ```python
 from pricelib import *
 option = StandardSnowball(maturity=1, lock_term=3, s0=100, barrier_out=103,
@@ -193,7 +194,7 @@ mc_engine = MCVanillaEngine(process, n_path=100000, seed=0,
                             rands_method=RandsMethod.LowDiscrepancy,
                             antithetic_variate=True, ld_method=LdMethod.Sobol) 
 quad_engine = QuadVanillaEngine(process, quad_method=QuadMethod.Simpson,
-                                n_points=801, n_max=4)
+                                n_points=801)
 bitree_engine = BiTreeVanillaEngine(process, tree_branches=500)
 pde_engine = FdmVanillaEngine(process, s_step=400, n_smax=4, fdm_theta=0.5)
 ```
@@ -309,6 +310,8 @@ print(option.price())
   * 最近最少使用缓存lru_cache(Last recently used cache)；
   * 对于Monte Carlo模拟法，支持方差缩减方法和低差异序列，加快收敛速度，减少需要的模拟路径数；支持复用已有的随机数矩阵和价格路径；
   * 对于PDE有限差分法，由于需要求解的线性方程组的系数矩阵都是三对角矩阵，本定价库使用Thomas算法(the Tridiagonal Matrix Algorithm)提高求解效率，本方法比矩阵求逆或LU分解更快。
+  * 对于数值积分法，使用快速傅里叶变换(FFT, Fast Fourier Transformation)加速计算，将$O(N^2)$的计算复杂度降低到了$O(NlogN)$。
+  * 以一年期锁三的经典雪球为例，使用Intel 13900K 3.00GHz的CPU、Python3.12.2运行pricelib进行定价，10万条路径蒙特卡洛模拟耗时0.399秒，PDE有限差分法耗时0.168秒，FFT积分法耗时0.087秒。
 
 ### 4.2 目前的局限
 当前库中暂未把资金交易作为重点，例如，在发行雪球时，在各个时点与对手方进行现金和利息的收付，后续我们会视情况增加。此外，我们目前聚焦于权益类衍生品，利率、汇率、商品等其他品种会在后续逐步扩展。
@@ -383,6 +386,7 @@ https://api.galatech.com.cn/pyRisk/pyRisk_1.0.0_win10_x64.zip
 - pandas>=2.0.3
 - numba>=0.57.1
 - scipy>=1.8.0
+- rocket-fft~=0.2
 - importlib-metadata>=6.8.0
 
 可选安装以下绘图依赖项：
@@ -420,5 +424,3 @@ limitations under the License.
 ## 9. 特别鸣谢
 
 在长期的默默地准备中，来自上海财经大学的多位实习生做出了重要的贡献。在这里我们要大声地感谢他们：夏鸿翔、张鹏任、张峻尉、刘振伟、裴子涵，谢谢你们！也让我们感谢上海财经大学培养了这么多优秀的学生，为金融强国贡献了力量！
-
-

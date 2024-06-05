@@ -21,7 +21,7 @@ def plot_greeks(pde_engine, barrier_in, spot):
     fig3 = pde_plot.draw_greeks_curve(delta_matrix, gamma_matrix, t=0, spot_range=(65, 115), show_plot=True)
     # 绘制delta上下限的等高线
     pde_plot.draw_greeks_contour(delta_matrix, barrier_in=barrier_in * pde_engine.s_step / (pde_engine.n_smax * spot),
-                                 high_value=1.2, low_value=0.01)
+                                 high_value=1.5, low_value=0.01, title=f'一年期锁3平敲雪球理论Delta区间: 0.01-1.5')
     return fig1, fig2, fig3
 
 
@@ -31,7 +31,7 @@ def run():
     engine = FdmSnowBallEngine(s_step=200, n_smax=2, s=100, r=0.02, q=0.01, vol=0.17)
     option = StandardSnowball(maturity=1, start_date=start_date, lock_term=3, s0=100, barrier_out=103, barrier_in=80,
                               coupon_out=0.107, engine=engine)
-    option.price()
+    print(option.price())
     plot_greeks(engine, 80, 100)
 
 

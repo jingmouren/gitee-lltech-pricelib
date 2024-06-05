@@ -37,6 +37,7 @@ def run():
                                     antithetic_variate=True, ld_method=LdMethod.Halton, seed=0)
 
     pde_engine = FdmDoubleSharkEngine(process, s_step=800, n_smax=2, fdm_theta=1)
+    quad_engine = QuadDoubleSharkEngine(process, quad_method=QuadMethod.Trapezoid, n_points=2001)
 
     # 4. 定义产品：双鲨结构
     t_step_per_year = 243
@@ -67,6 +68,9 @@ def run():
     option_discrete.set_pricing_engine(pde_engine)
     price_pde_discrete = option_discrete.price()
 
+    option_discrete.set_pricing_engine(quad_engine)
+    price_quad = option_discrete.price()
+
     # 连续观察
     option_continuous.set_pricing_engine(Ikeda_Kunitomo_1992_engine)
     Ikeda_Kunitomo_1992_continuous = option_continuous.price()
@@ -79,19 +83,19 @@ def run():
 
     # 将结果添加到列表中
     results_discrete.append([str(option_discrete), Ikeda_Kunitomo_1992_discrete, Haug_1998_discrete,
-                             price_mc, price_pde_discrete])
+                             price_mc, price_pde_discrete, price_quad])
     results_continuous.append([str(option_continuous), Ikeda_Kunitomo_1992_continuous, Haug_1998_continuous,
                                price_pde_continuous])
 
     df1 = pd.DataFrame(results_discrete,
-                       columns=['双鲨期权(每日观察)', 'I&K1992', 'Haug1998', 'MonteCarlo', 'PDE'])
-    df2 = pd.DataFrame(results_continuous, columns=['双鲨期权(连续观察)', 'I&K1992', 'Haug1998', 'PDE'])
+                       columns=['双鲨期权(每日观察)', 'I&K1992', 'Haug1998', 'MonteCarlo', 'PDE', 'Quad'])
+    df2 = pd.DataFrame(results_continuous, columns=['双鲨期权(连续观察)', 'I&K1992', 'Haug1998', 'PDE', ])
     return df1, df2
 
 
 if __name__ == '__main__':
+    print(lite())
     pd.set_option('display.max_columns', None)
     dfa, dfb = run()
     print(dfa)
     print(dfb)
-    print(lite())

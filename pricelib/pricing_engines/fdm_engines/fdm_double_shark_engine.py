@@ -42,11 +42,8 @@ class FdmDoubleSharkEngine(FdmBarrierEngine):
     def _init_terminal_condition(self, s_vec):
         """初始化终止条件
         双鲨结构，上方是call，下方是put"""
-        yv = (np.maximum(s_vec - self.prod.strike[1], 0) * self.prod.parti[1] +
+        call_put_payoff = (np.maximum(s_vec - self.prod.strike[1], 0) * self.prod.parti[1] +
               np.maximum(self.prod.strike[0] - s_vec, 0) * self.prod.parti[0])
-        if self.prod.discrete_obs_interval is None:  # 连续观察
-            return yv
-        else:  # 离散观察
-            yv = np.where(s_vec >= self.bound[1], self.rebate[1],
-                          np.where(s_vec <= self.bound[0], self.rebate[0], yv))
-            return yv
+        yv = np.where(s_vec >= self.bound[1], self.rebate[1],
+                      np.where(s_vec <= self.bound[0], self.rebate[0], call_put_payoff))
+        return yv

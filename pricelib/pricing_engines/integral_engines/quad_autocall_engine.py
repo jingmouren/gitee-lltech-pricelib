@@ -25,10 +25,13 @@ class QuadAutoCallEngine(QuadEngine):
         """
         calculate_date = global_evaluation_date() if t is None else t
         _maturity = (prod.end_date - calculate_date).days / prod.annual_days.value
+        _maturity_business_days = prod.trade_calendar.business_days_between(calculate_date,
+                                                                            prod.end_date) / prod.t_step_per_year
         obs_dates = prod.obs_dates.count_business_days(calculate_date)
         obs_dates = np.array([num / prod.t_step_per_year for num in obs_dates if num >= 0])
-        pay_dates = prod.pay_dates.count_calendar_days(calculate_date)
-        pay_dates = np.array([num / prod.annual_days.value for num in pay_dates if num >= 0])
+        calculate_start_diff = (calculate_date - prod.start_date).days
+        pay_dates = prod.pay_dates.count_calendar_days(prod.start_date)
+        pay_dates = np.array([num / prod.annual_days.value for num in pay_dates if num >= calculate_start_diff])
         assert len(obs_dates) == len(pay_dates), f"Error: {prod}的观察日和付息日长度不一致"
         diff_obs_pay_dates = np.array([(prod.pay_dates.date_schedule[i] - prod.obs_dates.date_schedule[i]).days
                                        for i in range(len(obs_dates))]) / prod.annual_days.value
@@ -43,23 +46,32 @@ class QuadAutoCallEngine(QuadEngine):
         q = self.process.div(_maturity)
         vol = self.process.vol(_maturity, spot)
 
-        self.backward_steps = obs_dates.size
         self._check_method_params()
         self.set_quad_params(r=r, q=q, vol=vol)
-        upper_barrier = self.n_max * spot
-        lower_barrier = 1
-        s_vec = np.linspace(lower_barrier, upper_barrier, self.n_points)
-        v_grid = np.zeros(shape=(self.n_points, self.backward_steps + 1))
-        s_vec = np.tile(s_vec, reps=(self.backward_steps + 1, 1)).T
+        # 初始化fft的对数价格向量及边界的对数价格向量
+        self.init_grid(spot, vol, _maturity_business_days)
+        s_vec = np.exp(self.ln_s_vec)
 
-        for step in range(self.backward_steps, 0, -1):
-            y = s_vec[:, step]
-            current_barrier = int((_barrier_out[step - 1] - lower_barrier) / (
-                        upper_barrier - lower_barrier) * self.n_points)  # 行权价在价格格点上的对应格点
+        if obs_dates[0] == 0:
+            # 如果估值日就是敲出观察日
+            if (prod.callput == CallPut.Call and spot >= _barrier_out[0]) or (
+                    prod.callput == CallPut.Put and spot <= _barrier_out[0]):  # 发生敲出
+                return prod.s0 * (prod.margin_lvl + _coupon_out[0] * pay_dates[
+                        0]) * math.exp(-r * diff_obs_pay_dates[0])
+            else:  # 没有发生敲出，则积分迭代步数少一次
+                s0_dt = obs_dates[1]
+                dt_vec = np.diff(obs_dates)[1:]
+        else:
+            s0_dt = obs_dates[0]
+            dt_vec = np.diff(obs_dates)
 
-            last_obs_out = obs_dates[step - 1]
+        self.backward_steps = dt_vec.size
+        v_grid = np.zeros(shape=(self.n_points, self.backward_steps + 2))
+        for step in range(self.backward_steps + 1, 0, -1):
+            y = self.ln_s_vec
+            current_barrier = np.searchsorted(s_vec, _barrier_out[step - 1], side='right')  # 行权价在价格格点上的对应格点
 
-            if step == self.backward_steps:
+            if step == self.backward_steps + 1:
                 if prod.callput == CallPut.Call:
                     v_grid[current_barrier:, -1] = (prod.margin_lvl + _coupon_out[-1] * _maturity) * prod.s0
                     v_grid[:current_barrier, -1] = (prod.margin_lvl + prod.coupon_div * _maturity) * prod.s0
@@ -68,21 +80,17 @@ class QuadAutoCallEngine(QuadEngine):
                     v_grid[current_barrier:, -1] = (prod.margin_lvl + prod.coupon_div * _maturity) * prod.s0
             else:
                 if prod.callput == CallPut.Call:
-                    x = s_vec[:current_barrier, step]
-                    v_grid[:current_barrier, step] = self.step_backward(x, y, v_grid[:, step + 1],
-                                                                        obs_dates[step] - last_obs_out)
-                    v_grid[current_barrier:, step] = prod.s0 * (prod.margin_lvl + _coupon_out[step] * pay_dates[
-                        step]) * math.exp(-r * diff_obs_pay_dates[step])
+                    x = self.ln_s_vec[:current_barrier]
+                    v_grid[:current_barrier, step] = self.fft_step_backward(x, y, v_grid[:, step + 1], dt_vec[step - 1])
+                    v_grid[current_barrier:, step] = prod.s0 * (prod.margin_lvl + _coupon_out[step - 1] * pay_dates[
+                        step - 1]) * math.exp(-r * diff_obs_pay_dates[step - 1])
 
                 elif prod.callput == CallPut.Put:
-                    x = s_vec[current_barrier:, step]
-                    v_grid[current_barrier:, step] = self.step_backward(x, y, v_grid[:, step + 1],
-                                                                        obs_dates[step] - last_obs_out)
-                    v_grid[:current_barrier, step] = prod.s0 * (prod.margin_lvl + _coupon_out[step] * pay_dates[
-                        step]) * math.exp(-r * diff_obs_pay_dates[step])
+                    x = self.ln_s_vec[current_barrier:]
+                    v_grid[current_barrier:, step] = self.fft_step_backward(x, y, v_grid[:, step + 1], dt_vec[step - 1])
+                    v_grid[:current_barrier, step] = prod.s0 * (prod.margin_lvl + _coupon_out[step - 1] * pay_dates[
+                        step - 1]) * math.exp(-r * diff_obs_pay_dates[step - 1])
 
-        y = s_vec[:, 1]
-        x = np.array(spot)
-        value = self.step_backward(x, y, v_grid[:, 1], obs_dates[1])[0] * math.exp(-r * diff_obs_pay_dates[0])
-
+        x = np.array([np.log(spot)])
+        value = self.fft_step_backward(x, self.ln_s_vec, v_grid[:, 1], s0_dt)[0]
         return value

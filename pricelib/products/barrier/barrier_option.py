@@ -32,7 +32,7 @@ class BarrierOption(OptionBase, Observer):
             updown: 向上向下类型，UpDown枚举类，Up/Down
             payment_type: 现金返还支付类型，PaymentType枚举类，敲入默认为到期支付Expire；敲出默认为立即支付Hit
             parti: float, 香草期权的参与率，默认为1
-            status: 估值日前的敲入敲出状态，StatusType枚举类，默认为NoTouch
+            status: 估值日前的敲入敲出状态，StatusType枚举类，默认为NoTouch未敲入/未敲出，UpTouch为向上敲入/敲出，DownTouch为向下敲入/敲出
             engine: 定价引擎，PricingEngine类，以下几种引擎均支持向上/向下、敲入/敲出、看涨/看跌8种单边障碍期权，支持敲出/未敲入现金返还
                             解析解和PDE引擎支持离散观察/连续观察，其余引擎只支持离散观察(默认为每日观察)
                     解析解: AnalyticBarrierEngine 敲入现金返还为到期支付；敲出现金返还为立即支付
@@ -159,6 +159,7 @@ class BarrierOption(OptionBase, Observer):
             spot: float，标的价格
         Returns: 期权现值
         """
+        self.validate_parameters(t=t)
         if self.engine.engine_type == EngineType.PdeEngine:  # 接口特殊是因为PDE引擎兼容了单双边障碍
             if self.updown == UpDown.Up:
                 bound = (None, self.barrier)

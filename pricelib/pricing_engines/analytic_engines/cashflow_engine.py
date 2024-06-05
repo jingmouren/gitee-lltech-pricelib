@@ -18,7 +18,7 @@ class CashFlowEngine(AnalyticEngine):
     payment_type = PaymentType.Expire
     exercise_type = ExerciseType.American
 
-    def __init__(self, stoch_process: StochProcessBase = None, *, s=None, r=None, q=None, vol=None):
+    def __init__(self, stoch_process: StochProcessBase = None, *, s=None, r=None, q=0, vol=0):
         """
         初始化现金流闭式解定价引擎
         Args:
@@ -34,24 +34,13 @@ class CashFlowEngine(AnalyticEngine):
         self.cashflow = None
 
     # pylint: disable=arguments-differ
-    def get_product_params(self, payment_date, cashflow):
-        """
-        获取现金流参数
-        Args:
-            payment_date: 现金流发生日期
-            cashflow: 现金流数量
-        Returns: None
-        """
-        self.payment_date = payment_date
-        self.cashflow = cashflow
-
-    # pylint: disable=arguments-differ
-    def calc_present_value(self):
+    def calc_present_value(self, prod):
         """
         计算现金流现值
+        Args:
+            prod: Product产品对象
         Returns:
             pv: 现金流现值
         """
-        r = self.process.interest
-        pv = self.cashflow * r.disc_factor(t2=self.payment_date)
+        pv = prod.cashflow * self.process.interest.disc_factor(t2=prod.payment_date)
         return pv

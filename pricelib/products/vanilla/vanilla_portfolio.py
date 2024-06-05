@@ -141,6 +141,7 @@ class VanillaPortfolio(OptionBase):
             spot: float，标的价格
         Returns: 期权现值
         """
+        self.validate_parameters(t=t)
         result = 0
         for asset, position in self.underlying_list:
             result += position * asset.price(t=t, spot=spot)

@@ -50,7 +50,7 @@ class AutocallableBase(OptionBase, Observer):
             lock_term: int，锁定期，单位为月，锁定期内不触发敲出
             trigger: bool，是否为触发器，即敲出票息是否年化，True为绝对值，False为百分比
             in_obs_type: 敲入观察类型，ExerciseType枚举类，默认为American每日观察；European为仅到期日观察是否敲入
-            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
+            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch, 即未敲入未敲出；UpTouch为已敲出，DownTouch为已敲入
             engine: 定价引擎，PricingEngine类
                     蒙特卡洛: MCAutoCallableEngine
                     PDE: FdmSnowBallEngine
@@ -157,6 +157,7 @@ class AutocallableBase(OptionBase, Observer):
             spot: float，标的价格
         Returns: 期权现值
         """
+        self.validate_parameters(t=t)
         price = self.engine.calc_present_value(prod=self, t=t, spot=spot)
         return price
 
@@ -196,7 +197,7 @@ class PhoenixBase(OptionBase, Observer):
             strike_upper: float，敲入发生后(熊市价差)的高行权价，即OTM行权价(<s0)，普通凤凰敲入发生后的高行权价为期初价格s0
             strike_lower: float，敲入发生后(熊市价差)的低行权价，即保底边界，越高提供的保护越多，值为0时不保底
             lock_term: int，锁定期，单位为月，锁定期内不触发敲出
-            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
+            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch，已敲入未敲出为DownTouch，已敲出为UpTouch
             in_obs_type: 敲入观察类型，ExerciseType枚举类，默认为American每日观察；European为仅到期日观察是否敲入
             engine: 定价引擎，PricingEngine类
                     蒙特卡洛: MCPhoenixEngine
@@ -231,14 +232,15 @@ class PhoenixBase(OptionBase, Observer):
             self.maturity = (end_date - start_date).days / annual_days.value
         else:
             self.maturity = maturity
+        len_months = round(self.maturity * 12)
         # obs_dates无锁定期，因为迭代过程中paydates和barrier in的改变都发生在敲出日obs_dates，锁定期靠敲出价+inf实现
         if obs_dates is None and pay_dates is None:  # 观察日列表
             self.obs_dates = self.pay_dates = Schedule(trade_calendar=trade_calendar, start=self.start_date,
                                                        end=self.end_date, freq='m', lock_term=1)
             self.end_date = self.obs_dates.end  # 修正结束时间
         elif obs_dates is not None and pay_dates is not None:
-            assert len(pay_dates) == round(self.maturity * 12), "Error: 输入派息日数组长度不等于存续期月份数"
-            assert len(obs_dates) == round(self.maturity * 12) - lock_term + 1, "Error: 输入敲出观察日数组长度不等于存续期月份数减去锁定期"
+            assert len(pay_dates) == len_months, "Error: 输入派息日数组长度不等于存续期月份数"
+            assert len(obs_dates) == len_months - lock_term + 1, "Error: 输入敲出观察日数组长度不等于存续期月份数减去锁定期"
             # todo: 区分敲出观察日和付息观察日，以及敲出支付日和付息日
             self.obs_dates = Schedule(trade_calendar=trade_calendar,
                                       date_schedule=pay_dates[:lock_term - 1] + obs_dates)
@@ -248,14 +250,20 @@ class PhoenixBase(OptionBase, Observer):
         self.t_step_per_year = t_step_per_year
 
         self.lock_term = lock_term  # 锁定期
-        # 锁定期敲出价格 为+inf
-        self.barrier_out = barrier_out  # 敲出线
+        # 敲出线
         if barrier_out is not None:
-            assert isinstance(barrier_out, np.ndarray), "Error: 输入的敲出线必须是np.adarray数组"
-            self.barrier_out[:(lock_term - 1)] = np.inf
+            assert isinstance(barrier_out, (list, np.ndarray)) and len(barrier_out) == len_months, \
+                f"Error: 输入的敲出线必须是与存续月份数{len_months}等长的list列表或np.adarray数组"
+            self.barrier_out = np.array(barrier_out).astype(float)
+            self.barrier_out[:(lock_term - 1)] = np.inf  # 锁定期敲出价格 为+inf
+        else:
+            self.barrier_out = barrier_out
         self.barrier_in = barrier_in  # 敲入线
         self.barrier_yield = barrier_yield  # 派息边界价格
         self.coupon = coupon  # 票息
+        if coupon is not None:
+            assert isinstance(coupon, (list, np.ndarray)) and len(coupon) == len_months, \
+                f"Error: 输入的票息必须是与存续月份数{len_months}等长的list列表或np.adarray数组"
         self.parti_in = parti_in  # 下跌参与率
         self.margin_lvl = margin_lvl  # 预付金比例
         self.strike_upper = s0 if strike_upper is None else strike_upper  # 敲入后高执行价
@@ -301,5 +309,6 @@ class PhoenixBase(OptionBase, Observer):
             spot: float，标的价格
         Returns: 期权现值
         """
+        self.validate_parameters(t=t)
         price = self.engine.calc_present_value(prod=self, t=t, spot=spot)
         return price

@@ -9,6 +9,7 @@ from contextlib import suppress
 import datetime
 import numpy as np
 from ..time import global_evaluation_date
+from ..pricing_engine_base.engine_base import PricingEngineBase
 
 
 class OptionBase(metaclass=ABCMeta):
@@ -18,9 +19,11 @@ class OptionBase(metaclass=ABCMeta):
         """初始化
         engine: PricingEngine，定价引擎
         trade_calendar: TradeCalendar，交易日历
+        end_date: datetime.date，到期日
         """
         self.engine = None
         self.trade_calendar = None
+        self.end_date = None
 
     @abstractmethod
     def set_pricing_engine(self, engine):
@@ -37,6 +40,20 @@ class OptionBase(metaclass=ABCMeta):
         """执行定价
         对于标的期初价格为s0的期权，以香草期权为例，返回的是BSM公式的定价结果，即max(0, St - K)期望的现值
         如果想要得到单位估值，需要再除以s0"""
+        self.validate_parameters()
+
+    def validate_parameters(self, t=None):
+        """price方法中，先检查产品是否已经配置了定价引擎，估值日是否小于终止日
+        Args:
+            t: datetime.date，计算期权价格的日期，默认None，此时使用全局估值日"""
+        if self.engine is None or not isinstance(self.engine, PricingEngineBase):
+            raise AttributeError("尚未配置定价引擎，您可以在以下两种方法中选择:\n"
+                                 "    1. 在产品类同时输入s,r,q,vol以创建默认定价引擎;\n"
+                                 "    2. 自行创建定价引擎，再使用set_pricing_engine方法配置到产品中")
+        calculate_date = global_evaluation_date() if t is None else t
+        if calculate_date > self.end_date:
+            raise ValueError(f"估值日必须小于等于到期日, 当前估值日为{calculate_date}, 到期日为{self.end_date}.\n"
+                             f"默认估值日是今天。如需修改，请使用set_evaluation_date(datetime.date(2024, 5, 20))配置全局估值日。")
 
     def delta(self, spot=None, step=None, *args, **kwargs):
         """求价格spot处的delta值
@@ -49,6 +66,7 @@ class OptionBase(metaclass=ABCMeta):
         try:
             return self.engine.delta(prod=self, spot=spot, step=step, *args, **kwargs)
         except AttributeError:
+            self.validate_parameters()
             spot = self.engine.process.spot() if spot is None else spot
             step = spot * 0.01 if step is None else step
             up_price = self.price(spot=spot + step)
@@ -67,6 +85,7 @@ class OptionBase(metaclass=ABCMeta):
         try:
             return self.engine.gamma(prod=self, spot=spot, step=step, *args, **kwargs)
         except AttributeError:
+            self.validate_parameters()
             spot = self.engine.process.spot() if spot is None else spot
             step = spot * 0.01 if step is None else step
             up_price = self.price(spot=spot + step)
@@ -87,6 +106,7 @@ class OptionBase(metaclass=ABCMeta):
         try:
             return self.engine.vega(prod=self, spot=spot, step=step, *args, **kwargs)
         except AttributeError:
+            self.validate_parameters()
             spot = self.engine.process.spot() if spot is None else spot
             last_vol = self.engine.process.vol.volval
             last_price = self.price(spot=spot)
@@ -108,6 +128,7 @@ class OptionBase(metaclass=ABCMeta):
         try:
             return self.engine.theta(prod=self, spot=spot, step=step, *args, **kwargs)
         except AttributeError:
+            self.validate_parameters()
             spot = self.engine.process.spot() if spot is None else spot
             step = datetime.timedelta(days=step)
             origin_price = self.price(spot=spot)
@@ -128,6 +149,7 @@ class OptionBase(metaclass=ABCMeta):
         try:
             return self.engine.rho(prod=self, spot=spot, step=step, *args, **kwargs)
         except AttributeError:
+            self.validate_parameters()
             spot = self.engine.process.spot() if spot is None else spot
             last_r = self.engine.process.interest.data
             last_price = self.price(spot=spot)
@@ -150,7 +172,7 @@ class OptionBase(metaclass=ABCMeta):
             with suppress(AttributeError):
                 self.price()
                 return self.engine.pv_and_greeks(prod=self, spot=spot, *args, **kwargs)
-
+        self.validate_parameters()
         spot = self.engine.process.spot() if spot is None else spot
         pv = np.float64(self.price(spot=spot))
         s_step = spot * 0.01

@@ -31,7 +31,7 @@ class QuadVanillaEngine(QuadEngine):
         q = self.process.div(tau)
         vol = self.process.vol(tau, spot)
         self._check_method_params()
-
+        dt = tau
         if prod.exercise_type == ExerciseType.European:
             self.backward_steps = 1
         elif prod.exercise_type == ExerciseType.American:
@@ -40,30 +40,23 @@ class QuadVanillaEngine(QuadEngine):
         else:
             raise ValueError(f"不支持的行权方式{prod.exercise_type.value}")
 
-        v_grid = np.empty(shape=(self.n_points, self.backward_steps + 1))
-        s_min = 0.01
-        s_max = self.n_max * spot
-        s_vec = np.linspace(s_min, s_max, self.n_points)
-        s_vec = np.tile(s_vec, reps=(self.backward_steps + 1, 1)).T
-        # 设定期末价值
-        v_grid[:, -1] = np.maximum(prod.callput.value * (s_vec[:, -1] - prod.strike), 0)
         # 设置积分法engine参数
         self.set_quad_params(r=r, q=q, vol=vol)
+        # 设定期末价值
+        self.init_grid(spot, vol, tau)
+        v_vec = np.maximum(prod.callput.value * (np.exp(self.ln_s_vec) - prod.strike), 0)
+
         # 逐步回溯计算
         if prod.exercise_type == ExerciseType.European:
-            return self.step_backward(np.array(spot), s_vec[:, -1], v_grid[:, -1], tau)[0]
+            return self.fft_step_backward(np.log(np.array([spot])), self.ln_s_vec, v_vec, tau)[0]
         if prod.exercise_type == ExerciseType.American:
             for step in range(self.backward_steps - 1, 0, -1):
                 # 积分计算区域
-                y = s_vec[:, step + 1]
-                x = s_vec[:, step]
-                v_grid[:, step] = self.step_backward(x, y, v_grid[:, step + 1], dt)
-                v_grid[:, step] = np.minimum(v_grid[:, step], 1e250)  # 防止价格极大和极小时，期权价值趋近于无穷大
-                v_grid[:, step] = np.maximum(v_grid[:, step], prod.callput.value * (s_vec[:, step] - prod.strike))
-            erase = 1
-            y = s_vec[erase:-erase, 1]
-            x = np.array(spot)
-            value = self.step_backward(x, y, v_grid[erase:-erase, 1], dt)[0]
+                v_vec = self.fft_step_backward(self.ln_s_vec, self.ln_s_vec, v_vec, dt)
+                v_vec = np.maximum(v_vec, prod.callput.value * (np.exp(self.ln_s_vec) - prod.strike))
+
+            x = np.log(np.array([spot]))
+            value = self.fft_step_backward(x, self.ln_s_vec, v_vec, dt)[0]
             return value
 
         raise NotImplementedError(f"不支持的行权方式{prod.exercise_type.value}")

@@ -30,7 +30,7 @@ class DigitalOption(OptionBase, Observer):
             callput: 看涨看跌类型，CallPut枚举类，Call/Put
             exercise_type: 行权方式，ExerciseType枚举类，European/American
             payment_type: 支付方式，PaymentType枚举类，立即支付Hit/到期支付Expire
-            status: 触碰障碍的状态，StatusType枚举类，默认为NoTouch
+            status: 触碰障碍的状态，StatusType枚举类，默认为NoTouch未触碰，UpTouch为向上触碰，DownTouch为向下触碰
             engine: 定价引擎，PricingEngine类，以下几种引擎均支持欧式二元(现金或无)、美式二元(立即支付)、一触即付(到期支付)，
                             解析解和PDE引擎支持离散观察/连续观察，其余引擎只支持离散观察(默认为每日观察)
                     解析解: AnalyticCashOrNothingEngine
@@ -114,6 +114,7 @@ class DigitalOption(OptionBase, Observer):
             spot: float，标的价格
         Returns: 期权现值
         """
+        self.validate_parameters(t=t)
         if self.engine.engine_type == EngineType.PdeEngine:  # 接口特殊是因为PDE引擎兼容了单双边二元
             if self.callput == CallPut.Call:
                 bound = (None, self.strike)

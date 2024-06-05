@@ -36,7 +36,7 @@ class DoubleBarrierOption(OptionBase, Observer):
                                                   对敲出期权，元组第一位是低障碍价下方的现金返还，第二位是高障碍价上方的现金返还，
                                                   对敲入期权，元组第一位是敲入现金返还，第二位没有用处。
             parti: float, 香草期权的参与率，默认为1
-            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
+            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch未触碰，UpTouch为向上触碰，DownTouch为向下触碰
             engine: 定价引擎，PricingEngine类
                     解析解: AnalyticDoubleBarrierEngine 只支持美式观察(整个有效期观察)；支持连续观察/离散观察(默认为每日观察)；
                                                        没有现金返还，现金返还都是0
@@ -144,6 +144,7 @@ class DoubleBarrierOption(OptionBase, Observer):
             spot: float，标的价格
         Returns: 期权现值
         """
+        self.validate_parameters(t=t)
         if self.engine.engine_type == EngineType.PdeEngine:  # 接口特殊是因为PDE引擎兼容了单双边障碍
             price = self.engine.calc_present_value(prod=self, t=t, spot=spot, bound=self.bound, rebate=self.rebate)
         else:

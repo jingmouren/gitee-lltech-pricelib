@@ -122,5 +122,6 @@ class Accumulator(OptionBase, Observer):
             spot: float，标的价格
         Returns: 期权现值
         """
+        self.validate_parameters(t=t)
         price = self.engine.calc_present_value(prod=self, t=t, spot=spot)
         return price

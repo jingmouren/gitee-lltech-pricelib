@@ -28,7 +28,7 @@ class Phoenix(PhoenixBase):
             lock_term: int，锁定期，单位为月，锁定期内不触发敲出
             parti_in: float，敲入后参与率，限损
             margin_lvl: float，保证金比例，默认为1，即无杠杆
-            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
+            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch未敲入未敲出，UpTouch为已敲出，DownTouch为已敲入
             engine: 定价引擎，PricingEngine类
                     蒙特卡洛: MCPhoenixEngine
                     PDE: FdmPhoenixEngine

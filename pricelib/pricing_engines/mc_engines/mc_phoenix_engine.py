@@ -46,13 +46,16 @@ class MCPhoenixEngine(McEngine):
 
         # 计算每条价格路径最小敲出时间
         barrier_out = np.tile(_barrier_out, (self.n_path, 1)).T
-        # 每条路径敲出时间索引(第几个月敲出)，这里的矩阵是True、False，np.argmax返回的是每一列的第一个最大值True的索引
-        knock_out_time_idx = np.argmax(paths[obs_dates, :] > barrier_out, axis=0)
+        # 每条路径敲出时间索引(第几个月敲出)，这里的矩阵是True、False
+        barrier_out_bool = paths[obs_dates, :] > barrier_out
+        # np.argmax返回的是每一列的第一个最大值True的索引
+        knock_out_time_idx = np.argmax(barrier_out_bool, axis=0)
+        # 如果一列中没有大于barrier的元素（全是False），那么argmax会返回0，因此需要将其‘索引’进行修正为paths.shape[0]，
+        # 即最后一个观察日的索引再+1，例如两年24个月的最后一个观察日索引是23，则未敲出索引设为24
+        knock_out_time_idx = np.where(np.any(barrier_out_bool, axis=0), knock_out_time_idx, obs_dates.size)
         # 统计哪些路径属于发生了敲出的情景(布尔索引)
-        knock_out_scenario = np.where(knock_out_time_idx > 0, True, False)
-        # 未敲出情形，将索引设置为最后一个观察日的索引再+1，例如两年24个月的最后一个观察日索引是23，则未敲出索引设为24
-        knock_out_time_idx[~knock_out_scenario] = obs_dates.size
-        # 每条路径持有时长，对于未敲出情形，持有到期，因此将索引设置为最后一个观察日的索引，即23
+        knock_out_scenario = np.where(knock_out_time_idx < obs_dates.size, True, False)
+        # 每条路径持有时长，对于未敲出情形，持有到期，因此将索引设置为最后一个观察日的索引，例如23
         hold_time_idx = knock_out_time_idx.copy()
         hold_time_idx[~knock_out_scenario] = obs_dates.size - 1
 
@@ -83,7 +86,7 @@ class MCPhoenixEngine(McEngine):
         # payoff汇总
         payoff = 0
         # 1.未敲入的部分（敲出/未敲入未敲出），到期还本
-        payoff += np.sum(discount_factor[hold_time_idx[~knock_in_scenario]]) * prod.s0
+        payoff += np.sum(discount_factor[hold_time_idx[~knock_in_scenario]]) * prod.margin_lvl * prod.s0
         # 2.派息payoff
         # 2.1 首先忽略派息线以下，假设在敲出之前的每个派息日都能拿到派息，将派息现值累加
         payoff += np.sum(cumulated_coupon[hold_time_idx])
@@ -92,7 +95,8 @@ class MCPhoenixEngine(McEngine):
         # 3.敲入，承担跌幅损失
         s_vec = paths[-1, knock_in_scenario].copy()
         s_vec[np.where(s_vec < prod.strike_lower)] = prod.strike_lower
-        payoff += ((prod.s0 - prod.strike_upper) * np.sum(knock_in_scenario) + np.sum(s_vec)) * discount_factor[-1]
+        payoff += ((prod.margin_lvl * prod.s0 - prod.strike_upper) * np.sum(knock_in_scenario
+                                                                            ) + np.sum(s_vec)) * discount_factor[-1]
 
         payoff /= self.n_path
         return payoff

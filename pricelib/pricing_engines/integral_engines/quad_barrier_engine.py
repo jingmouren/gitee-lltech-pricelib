@@ -58,62 +58,65 @@ class QuadBarrierEngine(QuadEngine):
         self.backward_steps = int(tau / dt)
         self._check_method_params()
 
-        v_grid = np.empty(shape=(self.n_points, self.backward_steps + 1))
+        # v_grid = np.empty(shape=(self.n_points, self.backward_steps + 1))
         # 设置积分法engine参数
         self.set_quad_params(r=r, q=q, vol=vol)
+        # 初始化fft的对数价格向量及边界的对数价格向量
+        self.init_grid(spot, vol, tau)
+        s_vec = np.exp(self.ln_s_vec)
 
-        upper_barrier = self.n_max * spot
-        lower_barrier = 1
-        s_vec = np.linspace(lower_barrier, upper_barrier, self.n_points)
-        s_vec = HashableArray(np.tile(s_vec, reps=(self.backward_steps + 1, 1)).T)
+        # upper_barrier = self.n_max * spot
+        # lower_barrier = 1
+        # s_vec = np.linspace(lower_barrier, upper_barrier, self.n_points)
+        # s_vec = HashableArray(np.tile(s_vec, reps=(self.backward_steps + 1, 1)).T)
 
         # 从后向前进行积分计算
         # 设定期末价值，在障碍价格内侧，默认设定未敲入，未敲出
         if prod.inout == InOut.Out:
-            v_grid[:, -1] = np.maximum(prod.callput.value * (s_vec[:, -1] - prod.strike), 0) * prod.parti
+            v_vec = np.maximum(prod.callput.value * (s_vec - prod.strike), 0) * prod.parti
             if prod.updown == UpDown.Up:
-                v_grid[np.where(s_vec[:, -1] > prod.barrier), -1] = prod.rebate
+                v_vec[np.where(s_vec > prod.barrier)] = prod.rebate
             elif prod.updown == UpDown.Down:
-                v_grid[np.where(s_vec[:, -1] < prod.barrier), -1] = prod.rebate
+                v_vec[np.where(s_vec < prod.barrier)] = prod.rebate
             else:
                 raise ValueError("updown must be Up or Down")
         elif prod.inout == InOut.In:
-            v_grid[:, -1] = prod.rebate
+            v_vec = prod.rebate * np.ones(len(s_vec))
             if prod.updown == UpDown.Up:
-                upper_index = np.where(s_vec[:, -1] > prod.barrier)
-                v_grid[upper_index, -1] = np.maximum(prod.callput.value * (s_vec[upper_index, -1] - prod.strike),
-                                                     0) * prod.parti
+                upper_index = np.where(s_vec > prod.barrier)
+                v_vec[upper_index] = np.maximum(prod.callput.value * (s_vec[upper_index] - prod.strike),
+                                                0) * prod.parti
             elif prod.updown == UpDown.Down:
-                lower_index = np.where(s_vec[:, -1] < prod.barrier)
-                v_grid[lower_index, -1] = np.maximum(prod.callput.value * (s_vec[lower_index, -1] - prod.strike),
-                                                     0) * prod.parti
+                lower_index = np.where(s_vec < prod.barrier)
+                v_vec[lower_index] = np.maximum(prod.callput.value * (s_vec[lower_index] - prod.strike),
+                                                0) * prod.parti
             else:
                 raise ValueError("updown must be Up or Down")
         else:
             raise ValueError("inout must be In or Out")
 
         for step in range(self.backward_steps - 1, 0, -1):
-            quad_range, an_range = self.set_quad_price_range(s_vec[:, step], prod.barrier, prod.updown)
+            quad_range, an_range = self.set_quad_price_range(s_vec, prod.barrier, prod.updown)
             # 数值积分计算区域
-            y = s_vec[:, step + 1]
-            x = s_vec[quad_range, step]
-            v_grid[quad_range, step] = self.step_backward(x, y, v_grid[:, step + 1], dt)
-            v_grid[:, step] = np.minimum(v_grid[:, step], 1e250)  # 防止价格极大和极小时，期权价值趋近于无穷大
+            y = self.ln_s_vec
+            x = self.ln_s_vec[quad_range]
+            v_vec[quad_range] = self.fft_step_backward(x, y, v_vec, dt)
+            # v_grid[:, step] = np.minimum(v_grid[:, step], 1e250)  # 防止价格极大和极小时，期权价值趋近于无穷大
             # 解析公式计算积分区域
             if prod.inout == InOut.In:
-                x = HashableArray(s_vec[an_range, step])
-                v_grid[an_range, step] = self.Vma(x, prod.strike, prod.callput.value,
-                                                  dt * (self.backward_steps - step)) * prod.callput.value * prod.parti
-                v_grid[an_range, step] -= self.Vmb(x, prod.strike, prod.callput.value, dt * (
+                x = HashableArray(self.ln_s_vec[an_range])
+                v_vec[an_range] = self.Vma(np.exp(x), prod.strike, prod.callput.value,
+                                           dt * (self.backward_steps - step)) * prod.callput.value * prod.parti
+                v_vec[an_range] -= self.Vmb(np.exp(x), prod.strike, prod.callput.value, dt * (
                         self.backward_steps - step)) * prod.strike * prod.callput.value * prod.parti
             elif prod.inout == InOut.Out:
                 if prod.payment_type == PaymentType.Expire:  # 到期支付现金补偿
-                    v_grid[an_range, step] = prod.rebate * np.exp(-r * dt * (self.backward_steps - step))
+                    v_vec[an_range] = prod.rebate * np.exp(-r * dt * (self.backward_steps - step))
                 else:  # 立即支付现金补偿
-                    v_grid[an_range, step] = prod.rebate
+                    v_vec[an_range] = prod.rebate
             else:
                 raise ValueError("inout must be In or Out")
-        y = s_vec[:, 1]
-        x = np.array(spot)
-        value = self.step_backward(x, y, v_grid[:, 1], dt)[0]
+
+        x = np.log(np.array([spot]))
+        value = self.fft_step_backward(x, self.ln_s_vec, v_vec, dt)[0]
         return value

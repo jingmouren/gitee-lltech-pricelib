@@ -83,8 +83,9 @@ class FdmAutoCallableEngine(FdmEngine):
                                                                             prod.end_date) / prod.t_step_per_year
         obs_dates = prod.obs_dates.count_business_days(calculate_date)
         obs_dates = np.array([num for num in obs_dates if num >= 0])
-        pay_dates = prod.pay_dates.count_calendar_days(calculate_date)
-        self.pay_dates = np.array([num / prod.annual_days.value for num in pay_dates if num >= 0])
+        calculate_start_diff = (calculate_date - prod.start_date).days
+        pay_dates = prod.pay_dates.count_calendar_days(prod.start_date)
+        self.pay_dates = np.array([num / prod.annual_days.value for num in pay_dates if num >= calculate_start_diff])
         assert len(obs_dates) == len(self.pay_dates), f"Error: {prod}的观察日和付息日长度不一致"
         self.diff_obs_pay_dates = np.array([(prod.pay_dates.date_schedule[i] - prod.obs_dates.date_schedule[i]).days
                                             for i in range(len(obs_dates))]) / prod.annual_days.value
@@ -369,7 +370,7 @@ class FdmSnowBallEngine(FdmAutoCallableEngine):
         # 矩阵最后一行: 每一个观察日前，股价上界能得到的本金加票息贴现
         self.next_paydate = self.pay_dates.repeat(
             np.diff(np.append(np.zeros((1,)), self.out_dates[::-1])).astype(int))  # 计息时间数
-        self.next_paydate = np.append(self.next_paydate[0], self.next_paydate)  # 每个交易日对应的下一个敲出观察日对应的付息日
+        self.next_paydate = np.append(self.pay_dates[0], self.next_paydate)  # 每个交易日对应的下一个敲出观察日对应的付息日
 
         # 触发器：上边界为绝对票息贴现/ 非触发器：上边界为年化票息贴现
         coupon_t = 1 if prod.trigger else self.next_paydate
@@ -506,11 +507,12 @@ class FdmSnowBallEngine(FdmAutoCallableEngine):
                 # 如果敲出票息是浮动的，调整敲出票息
                 self.next_coupon_out = (self.reversed_coupon_out[np.where(self.out_dates == j)[0][0]]
                                         if isinstance(prod.coupon_out, (list, np.ndarray)) else prod.coupon_out)
-                # 修改敲出边界条件
+                # 发生敲出的payoff
                 knock_out_payoff = (self.itm[self.out_idxs - 1] + (
                         prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0
                                     ) * self.process.interest.disc_factor(self.next_paydate[j], self.next_paydate[j] -
                                                                           self.next_diff_obspaydate[j])
+                # 用knock_out_payoff覆盖敲出价上方的衍生品价值
                 self.fd_not_in.v_grid[self.out_idxs, j] = self.fd_knockin.v_grid[self.out_idxs, j] = knock_out_payoff
 
                 if prod.in_obs_type != ExerciseType.European:
@@ -567,7 +569,7 @@ class FdmPhoenixEngine(FdmAutoCallableEngine):
         # 矩阵最后一行: 每一个观察日前，股价上界能得到的本金加票息贴现
         self.next_paydate = self.pay_dates.repeat(
             np.diff(np.append(np.zeros((1,)), self.out_dates[::-1])).astype(int))  # 计息时间数
-        self.next_paydate = np.append(self.next_paydate[0], self.next_paydate)  # 每个交易日对应的下一个敲出观察日对应的付息日
+        self.next_paydate = np.append(self.pay_dates[0], self.next_paydate)  # 每个交易日对应的下一个敲出观察日对应的付息日
         # 每一个观察日前，股价上界能得到：(派息+预付金)*贴现。这里派息次数取经过的敲出观察日的次数，这是近似的取值，因为派息次数是路径依赖的。
         # 由于股价上界很大，近似认为之前的每次派息日，价格都足够高，每次都可以获得派息。
         interest_next_paydate_discount_factor = self.process.interest.disc_factor(self.next_paydate, t_vec)

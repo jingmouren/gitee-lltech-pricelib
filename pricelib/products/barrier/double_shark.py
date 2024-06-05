@@ -34,16 +34,17 @@ class DoubleShark(OptionBase, Observer):
                                                   对敲出期权，元组第一位是低障碍价下方的补偿，第二位是高障碍价上方的补偿，
                                                   对敲入期权，元组第一位是敲入补偿，第二位没有用处。
             parti: (put_parti, call_parti), 香草期权的参与率，默认为1
-            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch
+            status: 敲入敲出状态，StatusType枚举类，默认为NoTouch未敲出，UpTouch为向上敲出，DownTouch为向下敲出
             engine: 定价引擎，PricingEngine类
                     解析解: AnalyticDoubleSharkEngine 分为两种，只支持美式观察(整个有效期观察)；支持连续观察/离散观察(默认为每日观察)；
                                                     Ikeda and Kunitomo(1992) 仅当行权价在障碍范围内时，公式才是成立的
                                                     Haug(1998) 仅适用于标的持有成本为0的期权(期货期权)
                                     两者的现金返还部分都使用美式双接触闭式解Hui(1996)，因此高低敲出现金返还也必须相等，现金返还到期支付
                     PDE: FdmDoubleSharkEngine  只支持美式观察(整个有效期观察)；支持连续观察/离散观察(默认为每日观察)；
-                                           支持现金返还；敲入现金返还为到期支付；敲出现金返还支持 立即支付/到期支付
+                                               支持现金返还；敲出现金返还支持 立即支付/到期支付
                     蒙特卡洛: MCDoubleSharkEngine  支持欧式观察(仅到期观察)/美式观察(整个有效期观察)；只支持离散观察(默认为每日观察)；
-                                            支持现金返还；敲入现金返还为到期支付；敲出现金返还支持 立即支付/到期支付
+                                                 支持现金返还；敲出现金返还支持 立即支付/到期支付
+                    积分法: QuadDoubleSharkEngine  只支持美式观察(整个有效期观察)；只支持离散观察(默认为每日观察)；支持现金返还到期支付；
         时间参数: 要么输入年化期限，要么输入起始日和到期日
             maturity: float，年化期限
             start_date: datetime.date，起始日
@@ -71,7 +72,9 @@ class DoubleShark(OptionBase, Observer):
         self.end_date = end_date if end_date is not None else (
                 self.start_date + datetime.timedelta(days=round(maturity * annual_days.value)))  # 结束时间
         self.maturity = maturity if maturity is not None else (self.end_date - self.start_date).days / annual_days.value
+        assert strike[0] <= strike[1], "ValueError: 双鲨结构的低行权价必须小于等于高行权价"
         self.strike = strike  # (低行权价, 高行权价)
+        assert bound[0] < bound[1], "ValueError: 双鲨结构的低障碍价必须小于高障碍价"
         self.bound = bound  # (低障碍价, 高障碍价)
         self.rebate = rebate  # 双接触: (下边界payoff, 上边界payoff); 双不接触: (不接触payoff, 无作用)
         self.window = window  # (观察窗口起始时间, 观察窗口结束时间)
@@ -125,6 +128,7 @@ class DoubleShark(OptionBase, Observer):
             spot: float，标的价格
         Returns: 期权现值
         """
+        self.validate_parameters(t=t)
         if self.engine.engine_type == EngineType.PdeEngine:  # 接口特殊是因为PDE引擎兼容了单双边障碍
             price = self.engine.calc_present_value(prod=self, t=t, spot=spot, bound=self.bound,
                                                    rebate=self.rebate, window=self.window)

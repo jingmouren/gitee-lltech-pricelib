@@ -36,7 +36,8 @@ class MCAutoCallableEngine(McEngine):
         # 以下为计算过程的中间变量
         self.prod = None  # Product产品对象
         self.obs_dates = None  # 根据估值日，将敲出观察日转化为List[int]，交易日期限
-        self.pay_dates = None  # 根据估值日，将支付日转化为List[float]，年化自然日期限
+        self.pay_dates = None  # 根据起始日，将支付日转化为List[float]，年化自然日期限，用于计算票息
+        self.pay_dates_tau = None  # 根据估值日，将支付日转化为List[float]，年化自然日期限，用于折现
         self._maturity = None  # 年化到期时间
         self.knock_out_date = None  # 每条路径的敲出时间
         self.not_knock_out = None  # 每条路径是否未敲出
@@ -63,13 +64,18 @@ class MCAutoCallableEngine(McEngine):
         _maturity_business_days = prod.trade_calendar.business_days_between(calculate_date, prod.end_date)
         obs_dates = prod.obs_dates.count_business_days(calculate_date)
         self.obs_dates = np.array([num for num in obs_dates if num >= 0])
-        pay_dates = prod.pay_dates.count_calendar_days(calculate_date)
-        self.pay_dates = np.array([num / prod.annual_days.value for num in pay_dates if num >= 0])
+        # 支付日 - 计算起始日到支付日的天数，用于计算应支付的敲出收益
+        calculate_start_diff = (calculate_date - prod.start_date).days
+        pay_dates = prod.pay_dates.count_calendar_days(prod.start_date)
+        self.pay_dates = np.array([num / prod.annual_days.value for num in pay_dates if num >= calculate_start_diff])
         assert len(self.obs_dates) == len(self.pay_dates), f"Error: {prod}的观察日和付息日长度不一致"
+        # 支付日 - 计算估值日到支付日的天数，用于折现
+        pay_dates_tau = prod.pay_dates.count_calendar_days(calculate_date)
+        self.pay_dates_tau = np.array([num / prod.annual_days.value for num in pay_dates_tau if num >= 0])
         # 经过估值日截断的列表，例如prod.barrier_out有22个，存续一年时估值，_barrier_out只有12个
-        self._barrier_out = prod.barrier_out[-len(obs_dates):].copy()
-        self._barrier_in = prod.barrier_in[-len(obs_dates):].copy()
-        self._coupon_out = prod.coupon_out[-len(obs_dates):].copy()
+        self._barrier_out = prod.barrier_out[-len(self.obs_dates):].copy()
+        self._barrier_in = prod.barrier_in[-len(self.obs_dates):].copy()
+        self._coupon_out = prod.coupon_out[-len(self.obs_dates):].copy()
         if spot is None:
             spot = self.process.spot()
         else:
@@ -111,8 +117,14 @@ class MCAutoCallableEngine(McEngine):
         # 每个交易日对应的自然日的下一个敲出观察自然日
         next_calendar_day = np.array(self.pay_dates).repeat(
             np.diff(np.append(np.zeros((1,)), self.obs_dates)).astype(int))
-        # 所有敲出路径的敲出自然日，年化，贴现用
-        knock_out_time_annual = next_calendar_day[knock_out_time - 1]
+        next_calendar_day = np.append(self.pay_dates[0], next_calendar_day)
+        # 所有敲出路径的起息日到敲出支付日的时间，年化，计算支付票息用
+        knock_out_time_annual = next_calendar_day[knock_out_time]
+        # 所有敲出路径的估值日到敲出支付日的时间，年化，折现用
+        next_calendar_day_tau = np.array(self.pay_dates_tau).repeat(
+            np.diff(np.append(np.zeros((1,)), self.obs_dates)).astype(int))
+        next_calendar_day_tau = np.append(self.pay_dates_tau[0], next_calendar_day_tau)
+        knock_out_tau = next_calendar_day_tau[knock_out_time]
         # 计算敲出价格，用于上涨参与payoff
         if isinstance(prod.strike_call, (int, float)):
             strike_call = prod.strike_call
@@ -125,7 +137,7 @@ class MCAutoCallableEngine(McEngine):
         # 把payoff先折现再求和,计算敲出总所入
         value = np.sum((prod.s0 * (coupon_call * (knock_out_time_annual if not prod.trigger else 1) + prod.margin_lvl)
                         + prod.parti_out * (self.s_paths[knock_out_time, is_knock_out] - strike_call))
-                       * self.process.interest.disc_factor(knock_out_time_annual))
+                       * self.process.interest.disc_factor(knock_out_tau))
         self.knock_out_profit = value
 
     def _cal_knock_in_scenario(self, *args, **kwargs):

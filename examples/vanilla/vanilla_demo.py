@@ -34,7 +34,7 @@ def run():
     an_Am_engine = AnalyticVanillaAmEngine(process, an_method="BAW")  # an_method="Bjerksund&Stensland2002", "BAW"
     mc_engine = MCVanillaEngine(process, n_path=100000, rands_method=RandsMethod.LowDiscrepancy,
                                 antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0)
-    quad_engine = QuadVanillaEngine(process, quad_method=QuadMethod.Simpson, n_points=801, n_max=4)
+    quad_engine = QuadVanillaEngine(process, quad_method=QuadMethod.Simpson, n_points=401)
     bitree_engine = BiTreeVanillaEngine(process, tree_branches=500)
     pde_engine = FdmVanillaEngine(process, s_step=400, n_smax=4, fdm_theta=0.5)
 
@@ -73,6 +73,6 @@ def run():
 
 
 if __name__ == '__main__':
+    print(lite())
     res = run()
     print(res)
-    print(lite())
