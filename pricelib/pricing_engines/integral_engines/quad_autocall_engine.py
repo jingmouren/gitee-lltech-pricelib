@@ -73,11 +73,11 @@ class QuadAutoCallEngine(QuadEngine):
 
             if step == self.backward_steps + 1:
                 if prod.callput == CallPut.Call:
-                    v_grid[current_barrier:, -1] = (prod.margin_lvl + _coupon_out[-1] * _maturity) * prod.s0
-                    v_grid[:current_barrier, -1] = (prod.margin_lvl + prod.coupon_div * _maturity) * prod.s0
+                    v_grid[current_barrier:, -1] = (prod.margin_lvl + _coupon_out[-1] * pay_dates[-1]) * prod.s0
+                    v_grid[:current_barrier, -1] = (prod.margin_lvl + prod.coupon_div * pay_dates[-1]) * prod.s0
                 elif prod.callput == CallPut.Put:
-                    v_grid[:current_barrier, -1] = (prod.margin_lvl + _coupon_out[-1] * _maturity) * prod.s0
-                    v_grid[current_barrier:, -1] = (prod.margin_lvl + prod.coupon_div * _maturity) * prod.s0
+                    v_grid[:current_barrier, -1] = (prod.margin_lvl + _coupon_out[-1] * pay_dates[-1]) * prod.s0
+                    v_grid[current_barrier:, -1] = (prod.margin_lvl + prod.coupon_div * pay_dates[-1]) * prod.s0
             else:
                 if prod.callput == CallPut.Call:
                     x = self.ln_s_vec[:current_barrier]

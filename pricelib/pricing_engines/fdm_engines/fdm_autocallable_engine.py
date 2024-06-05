@@ -443,7 +443,7 @@ class FdmSnowBallEngine(FdmAutoCallableEngine):
         # 虚值call在值度
         self.itm = np.where(s_vec - prod.strike_call > 0, (s_vec - prod.strike_call) * prod.parti_out, 0)
 
-        coupon_t = 1 if prod.trigger else maturity  # 票息是否年化
+        coupon_t = 1 if prod.trigger else self.pay_dates[-1]  # 票息是否年化
         # 矩阵最后一列：到期payoff。考虑到了保底、保证金\纯期权模式、以及敲出边界上方增加虚值call
         """已敲入：如果到期小于敲出边界，在100%本金模式下，小于保底边界，获得保底价；
                                                   大于保底边界，获得到期价格；
