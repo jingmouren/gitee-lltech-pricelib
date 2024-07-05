@@ -56,7 +56,7 @@ class MCVanillaEngine(McEngine):
             v_grid[-1, :] = np.maximum(prod.callput.value * (paths[-1, :] - prod.strike), 0)
             if n_step == 0:  # 如果估值日就是到期日
                 return np.mean(v_grid[-1, :])
-            for i in range(n_step - 1, -1, -1):
+            for i in range(n_step - 1, 0, -1):
                 v_grid[i, :] = v_grid[i + 1, :] * np.exp(-r * 1 / prod.t_step_per_year)
                 lsm_id = (prod.callput.value * (paths[i, :] - prod.strike) >= 0)
                 if np.array(lsm_id).size <= 2:  # 拟合曲线有三个参数，若实值点<3则无法拟合
@@ -68,5 +68,5 @@ class MCVanillaEngine(McEngine):
                 exercise_value = prod.callput.value * (paths[i, lsm_id] - prod.strike)
                 # v_grid[i, lsm_id] = np.where(exercise_value >= hold_value, exercise_value, v_grid[i, lsm_id])
                 v_grid[i, lsm_id] = np.maximum(hold_value, exercise_value)
-            return np.mean(v_grid[0, :])
+            return np.mean(v_grid[1, :] * np.exp(-r * 1 / prod.t_step_per_year))
         raise ValueError("不支持的行权方式, 香草mc定价引擎仅支持欧式期权和美式期权")
