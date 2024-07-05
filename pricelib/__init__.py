@@ -22,7 +22,6 @@ except importlib_metadata.PackageNotFoundError:
 def check_for_updates(package_name):
     """检查PyPI是否有新版本的包可用"""
     try:  # 从PyPI获取最新版本信息
-        print(1/0)
         requests = importlib.import_module("requests")
         response = requests.get(f"https://pypi.org/pypi/{package_name}/json")
         response.raise_for_status()
