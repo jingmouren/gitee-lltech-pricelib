@@ -140,13 +140,13 @@ pricelib中pv_and_greeks中各项的说明如下：
 | **theta** | 当期权结构剩余时间减少1个交易日，挂钩单位数量标的的期权结构的估值变化                                                  |
 | **rho**   | 当无风险利率上升1%时，挂钩单位数量标的的期权结构的估值变化                                                       |
 
-再比如较为复杂的雪球结构，"敲出票息10%的一年期锁三103-80平敲雪球"，一样只需两行代码即可完成定价：
+再比如较为复杂的雪球结构，"敲出票息11.3%的一年期锁三103-80平敲雪球"，一样只需两行代码即可完成定价：
 
 ```python
 from pricelib import *
 option = StandardSnowball(maturity=1, lock_term=3, s0=100, barrier_out=103,
-                          barrier_in=80, coupon_out=0.10, s=100, r=0.02,
-                          q=0.01, vol=0.16)
+                          barrier_in=80, coupon_out=0.113, s=100, r=0.02,
+                          q=0.04, vol=0.16)
 print(option.price())  
 ```
 这里的经典雪球会使用默认的PDE有限差分定价引擎。输入参数`s0=100, barrier_out=103, barrier_in=80`的价格是百分比形式，您也可以输入价格的绝对值，例如`s0=5535.40, barrier_out=5701.46, barrier_in=4428.32`，只要所有价格参数保持一致即可。
@@ -159,19 +159,32 @@ print(option.price())
 
 对于雪球结构的PDE定价引擎，您可以获取有限差分的price、delta和gamma网格，进行绘图：
 ```python
+import numpy as np
 from pricelib.common.utilities import pde_plot
 # 这里的option是上面的StandardSnowball对象，其默认定价引擎是FdmSnowBallEngine
 pde_engine = option.engine
-# 绘制delta和gamma曲面图
+# 计算未敲入雪球的Delta网格和Gamma网格
 delta_matrix, s_vec = pde_engine.delta_matrix(status=StatusType.NoTouch)
-fig1 = pde_plot.draw_greeks_surface("delta", delta_matrix, 
-                                    spot_range=(65, 115), show_plot=True)
 gamma_matrix, s_vec = pde_engine.gamma_matrix(status=StatusType.NoTouch)
-fig2 = pde_plot.draw_greeks_surface("gamma", gamma_matrix, show_plot=True)
 # 绘制t=0时的delta和gamma曲线
-fig3 = pde_plot.draw_greeks_curve(delta_matrix, gamma_matrix, t=0, 
-                                  spot_range=(65, 115), show_plot=True)
+s0, barrier_in, barrier_out = 100, 80, 103
+s_step, n_smax = pde_engine.s_step, pde_engine.n_smax
+spot_range = np.round(np.array([barrier_in / s0 - 0.1, barrier_out / s0 + 0.1])
+                      * s_step / n_smax).astype(int)
+fig0 = pde_plot.draw_greeks_curve(delta_matrix, gamma_matrix, t=0,
+       s_step=s_step, n_smax=n_smax, spot_range=spot_range, show_plot=True)
+# 绘制delta和gamma曲面图
+delta_matrix_ = delta_matrix[:, 0: int(delta_matrix.shape[1] * 0.90)]
+gamma_matrix_ = gamma_matrix[:, 0: int(gamma_matrix.shape[1] * 0.90)]
+fig1 = pde_plot.draw_greeks_surface("delta", delta_matrix_,
+       s_step=s_step, n_smax=n_smax, spot_range=spot_range, show_plot=True)
+fig2 = pde_plot.draw_greeks_surface("gamma", gamma_matrix_,
+       s_step=s_step, n_smax=n_smax, spot_range=spot_range, show_plot=True)
 ```
+
+<div align=center>
+<img src="./docs/delta_surface.png" alt="雪球Delta曲面" height="400">
+</div>
 
 ### 3.2 进阶使用: 为产品结构自行配置随机过程和定价引擎
  

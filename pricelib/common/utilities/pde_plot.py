@@ -64,6 +64,7 @@ def draw_greeks_surface(greeks_name, greeks_matrix, n_smax=None, s_step=None, sp
         margin={'l': 65, 'r': 50, 'b': 65, 't': 90},
         # margin=dict(r=0, l=0, t=0, b=0, pad=0)
     )
+    fig.update_scenes(yaxis_autorange='reversed')  # 反转y轴(标的价格)
     if show_plot:
         # 将图保存到本地
         # pyo.plot(fig, filename=f'./greeks_surface_plot.html')
