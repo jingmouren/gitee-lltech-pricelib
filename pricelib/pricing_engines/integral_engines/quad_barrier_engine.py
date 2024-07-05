@@ -51,10 +51,16 @@ class QuadBarrierEngine(QuadEngine):
         tau = prod.trade_calendar.business_days_between(calculate_date, prod.end_date) / prod.t_step_per_year
         if spot is None:
             spot = self.process.spot()
+
+        if tau == 0:  # 如果估值日就是到期日
+            # 直接计算终止条件
+            value = self._init_terminal_condition(prod, np.array([spot]))[0]
+            return value
+
         r = self.process.interest(tau)
         q = self.process.div(tau)
         vol = self.process.vol(tau, spot)
-        dt = prod.discrete_obs_interval
+        dt = 1 / prod.t_step_per_year if prod.discrete_obs_interval is None else prod.discrete_obs_interval
         self.backward_steps = int(tau / dt)
         self._check_method_params()
 
@@ -65,36 +71,9 @@ class QuadBarrierEngine(QuadEngine):
         self.init_grid(spot, vol, tau)
         s_vec = np.exp(self.ln_s_vec)
 
-        # upper_barrier = self.n_max * spot
-        # lower_barrier = 1
-        # s_vec = np.linspace(lower_barrier, upper_barrier, self.n_points)
-        # s_vec = HashableArray(np.tile(s_vec, reps=(self.backward_steps + 1, 1)).T)
-
         # 从后向前进行积分计算
         # 设定期末价值，在障碍价格内侧，默认设定未敲入，未敲出
-        if prod.inout == InOut.Out:
-            v_vec = np.maximum(prod.callput.value * (s_vec - prod.strike), 0) * prod.parti
-            if prod.updown == UpDown.Up:
-                v_vec[np.where(s_vec > prod.barrier)] = prod.rebate
-            elif prod.updown == UpDown.Down:
-                v_vec[np.where(s_vec < prod.barrier)] = prod.rebate
-            else:
-                raise ValueError("updown must be Up or Down")
-        elif prod.inout == InOut.In:
-            v_vec = prod.rebate * np.ones(len(s_vec))
-            if prod.updown == UpDown.Up:
-                upper_index = np.where(s_vec > prod.barrier)
-                v_vec[upper_index] = np.maximum(prod.callput.value * (s_vec[upper_index] - prod.strike),
-                                                0) * prod.parti
-            elif prod.updown == UpDown.Down:
-                lower_index = np.where(s_vec < prod.barrier)
-                v_vec[lower_index] = np.maximum(prod.callput.value * (s_vec[lower_index] - prod.strike),
-                                                0) * prod.parti
-            else:
-                raise ValueError("updown must be Up or Down")
-        else:
-            raise ValueError("inout must be In or Out")
-
+        v_vec = self._init_terminal_condition(prod, s_vec)
         for step in range(self.backward_steps - 1, 0, -1):
             quad_range, an_range = self.set_quad_price_range(s_vec, prod.barrier, prod.updown)
             # 数值积分计算区域
@@ -120,3 +99,34 @@ class QuadBarrierEngine(QuadEngine):
         x = np.log(np.array([spot]))
         value = self.fft_step_backward(x, self.ln_s_vec, v_vec, dt)[0]
         return value
+
+    @staticmethod
+    def _init_terminal_condition(prod, s_vec):
+        """初始化终止时的期权价值，在障碍价格内侧，默认设定未敲入，未敲出
+        Args:
+            prod: Product产品对象
+            s_vec: np.ndarray, 网格的价格格点
+        Returns:
+            payoff: np.ndarray, 期末价值向量
+        """
+        if prod.inout == InOut.Out:
+            v_vec = np.maximum(prod.callput.value * (s_vec - prod.strike), 0) * prod.parti
+            if prod.updown == UpDown.Up:
+                v_vec = np.where(s_vec > prod.barrier, prod.rebate, v_vec)
+            elif prod.updown == UpDown.Down:
+                v_vec = np.where(s_vec < prod.barrier, prod.rebate, v_vec)
+            else:
+                raise ValueError("updown must be Up or Down")
+        elif prod.inout == InOut.In:
+            v_vec = prod.rebate * np.ones(len(s_vec))
+            if prod.updown == UpDown.Up:
+                v_vec = np.where(s_vec > prod.barrier, np.maximum(prod.callput.value * (s_vec - prod.strike),
+                                                                  0) * prod.parti, v_vec)
+            elif prod.updown == UpDown.Down:
+                v_vec = np.where(s_vec < prod.barrier, np.maximum(prod.callput.value * (s_vec - prod.strike),
+                                                                  0) * prod.parti, v_vec)
+            else:
+                raise ValueError("updown must be Up or Down")
+        else:
+            raise ValueError("inout must be In or Out")
+        return v_vec

@@ -30,7 +30,7 @@ def run():
     # 2. 随机过程，BSM价格动态
     process = GeneralizedBSMProcess(spot=spot_price, interest=riskfree, div=dividend, vol=volatility)
 
-    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分、数值积分
+    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分
     Ikeda_Kunitomo_1992_engine = AnalyticDoubleBarrierEngine(process, formula_type="Ikeda&Kunitomo1992",
                                                              series_num=10, delta1=0, delta2=0)
     Haug_1998_engine = AnalyticDoubleBarrierEngine(process, formula_type="Haug1998")

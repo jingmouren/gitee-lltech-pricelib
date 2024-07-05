@@ -32,7 +32,7 @@ def run():
     # 2. 随机过程，BSM价格动态
     process = GeneralizedBSMProcess(spot=spot_price, interest=riskfree, div=dividend, vol=volatility)
 
-    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分、数值积分
+    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分、数值积分、二叉树
     an_engine = AnalyticBarrierEngine(process)
     mc_engine = MCBarrierEngine(process, n_path=100000, rands_method=RandsMethod.LowDiscrepancy,
                                 antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0)
@@ -45,7 +45,7 @@ def run():
     results_continuous = []
     for barrier_option in BarrierType:
         updown = barrier_option.value.updown
-        barrier_price = spot_price() + updown.value * 10
+        barrier_price = 100 + updown.value * 10
         # 离散观察(每日观察)
         option_discrete = BarrierOption(maturity=1, start_date=datetime.date(2021, 1, 5),
                                         strike=100, barrier=barrier_price, rebate=0,
@@ -87,8 +87,7 @@ def run():
                                  price_an_discrete, price_mc, price_quad, price_tree, price_pde_discrete])
         results_continuous.append([barrier_price, str(option_continuous),
                                    price_an_continuous, price_pde_continuous])
-    print(results_discrete)
-    print(results_continuous)
+
     df1 = pd.DataFrame(results_discrete,
                        columns=['障碍价', '障碍期权', '闭式解(每日观察)', 'MonteCarlo', 'Quadrature', '二叉树', 'PDE'])
     df2 = pd.DataFrame(results_continuous, columns=['障碍价', '障碍期权', '闭式解(连续观察)', 'PDE'])

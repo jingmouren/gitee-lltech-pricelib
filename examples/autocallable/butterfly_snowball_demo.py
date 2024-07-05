@@ -11,7 +11,7 @@ from pricelib import *
 def lite():
     """简易定价接口"""
     option = ButterflySnowball(maturity=3, lock_term=3, s0=100, barrier_out=103, barrier_in=70,
-                               coupon_out1=0.191, coupon_out2=0.06, coupon_out3=0.04, coupon_stair_ends=[12, 24, 36],
+                               coupon_out1=0.187, coupon_out2=0.06, coupon_out3=0.04, coupon_stair_ends=[12, 24, 36],
                                s=100, r=0.02, q=0.03, vol=0.15)
     return option.pv_and_greeks()
 
@@ -27,15 +27,15 @@ def run():
     volatility = BlackConstVol(0.15, name="中证1000波动率")
     # 2. 随机过程，BSM价格动态
     process = GeneralizedBSMProcess(spot=spot_price, interest=riskfree, div=dividend, vol=volatility)
-    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分、数值积分
-    mc_engine = MCAutoCallableEngine(process, n_path=100000, rands_method=RandsMethod.Pseudorandom,
+    # 3. 定价引擎，包括蒙特卡洛模拟、有限差分、数值积分
+    mc_engine = MCAutoCallableEngine(process, n_path=100000, rands_method=RandsMethod.LowDiscrepancy,
                                      antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0)
     quad_engine = QuadSnowballEngine(process, quad_method=QuadMethod.Simpson, n_points=2001)
     pde_engine = FdmSnowBallEngine(process, s_step=800, n_smax=2, fdm_theta=1)
 
     # 4. 定义产品：蝶变雪球
     option = ButterflySnowball(maturity=3, s0=100, start_date=datetime.date(2021, 1, 5),
-                               trade_calendar=CN_CALENDAR, barrier_out=103, barrier_in=70, coupon_out1=0.191,
+                               trade_calendar=CN_CALENDAR, barrier_out=103, barrier_in=70, coupon_out1=0.187,
                                coupon_out2=0.06, coupon_out3=0.04, coupon_div=None, coupon_stair_ends=[12, 24, 36],
                                lock_term=3, pay_dates=None, engine=None)
     # 5.为产品设置定价引擎

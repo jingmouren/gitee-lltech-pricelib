@@ -10,7 +10,7 @@ from pricelib import *
 
 if __name__ == '__main__':
     # 1. 从csv文件中读取div数据
-    div = pd.read_csv("../../tests/div.csv")
+    div = pd.read_csv("../../tests/resources/div.csv")
     # 2. 市场数据，包括标的物价格、无风险利率、分红率
     spot_price = SimpleQuote(value=2.367, name="中证1000指数")
     riskfree = ConstantRate(value=0.02, name="无风险利率")
@@ -29,8 +29,8 @@ if __name__ == '__main__':
     t_step_per_year = 243
     results = []
     exercise_type = ExerciseType.European
-    strike_arr = np.load('../../tests/strike.npy')
-    maturity_arr = np.load('../../tests/maturity.npy')
+    strike_arr = np.load('../../tests/resources/strike.npy')
+    maturity_arr = np.load('../../tests/resources/maturity.npy')
     for callput in CallPut:
         for maturity in maturity_arr:
             for strike in strike_arr:

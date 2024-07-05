@@ -83,7 +83,7 @@ class AnalyticDoubleSharkEngine(AnalyticEngine):
                                            payment_type=prod.payment_type, touch_type=TouchType.Touch,
                                            start_date=prod.start_date, end_date=prod.end_date,
                                            discrete_obs_interval=prod.discrete_obs_interval,
-                                           engine=AnalyticDoubleDigitalEngine(self.process, series_num=self.series_num))
+                                           engine=AnalyticDoubleDigitalEngine(self.process, series_num=10))
         result = (DOC.price(t=t, spot=spot) * prod.parti[1] +
                   DOP.price(t=t, spot=spot) * prod.parti[0] +
                   double_touch.price(t=t, spot=spot))

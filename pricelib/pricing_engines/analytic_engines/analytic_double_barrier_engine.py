@@ -14,7 +14,7 @@ from pricelib.common.pricing_engine_base import AnalyticEngine
 from pricelib.common.time import global_evaluation_date
 from ...products.vanilla.vanilla_option import VanillaOption
 from ...products.barrier.barrier_option import BarrierOption
-from .analytic_vanilla_european_engine import AnalyticVanillaEuEngine
+from .analytic_vanilla_european_engine import AnalyticVanillaEuEngine, bs_formula
 from .analytic_barrier_engine import AnalyticBarrierEngine
 
 
@@ -100,6 +100,15 @@ class AnalyticDoubleBarrierEngine(AnalyticEngine):
     # pylint: disable=invalid-name, too-many-locals
     def Ikeda_Kunitomo1992_pv(self, spot, r, q, vol, tau, bound, vanilla_option):
         """Ikeda and Kunitomo(1992)级数解，仅当行权价在障碍范围内时，公式才是成立的"""
+        if spot >= bound[1] or spot <= bound[0]:  # 标的价格不在障碍范围内时，直接计算payoff
+            if self.prod.inout == InOut.Out:  # 发生敲出，payoff为0
+                return 0
+            elif self.prod.inout == InOut.In:  # 发生敲入，返回香草期权的价值
+                return bs_formula(S=spot, K=self.prod.strike, T=tau, r=r, q=q, sigma=vol,
+                                  sign=self.prod.callput.value) * self.prod.parti
+            else:
+                raise ValueError("inout只能是InOut.In或InOut.Out")
+
         if self.prod.callput == CallPut.Call:
             E = bound[1] * math.exp(self.delta1 * tau)
         else:
@@ -135,9 +144,11 @@ class AnalyticDoubleBarrierEngine(AnalyticEngine):
                       self.prod.callput.value * self.prod.strike * math.exp(-r * tau) * np.sum(Nd2a - Nd2b))
         if self.prod.inout == InOut.Out:
             return double_out * self.prod.parti
-        # else: self.inout == InOut.In
-        double_in = vanilla_option.price() - double_out
-        return double_in * self.prod.parti
+        elif self.prod.inout == InOut.In:
+            double_in = vanilla_option.price() - double_out
+            return double_in * self.prod.parti
+        else:
+            raise ValueError("inout只能是InOut.In或InOut.Out")
 
     # pylint: disable=too-many-locals
     def Haug1998_pv(self, tau, bound, vanilla_option):
@@ -148,26 +159,26 @@ class AnalyticDoubleBarrierEngine(AnalyticEngine):
         else:
             opposite_callput = CallPut.Call
 
+        barrier_analytic_engine = AnalyticBarrierEngine(self.process, for_haug=True)
         up_barrier = BarrierOption(maturity=tau, strike=self.prod.strike, barrier=bound[1],
                                    updown=UpDown.Up, callput=self.prod.callput, inout=InOut.In, rebate=0,
                                    discrete_obs_interval=None,
-                                   engine=AnalyticBarrierEngine(self.process))
+                                   engine=barrier_analytic_engine)
         down_barrier = BarrierOption(maturity=tau, strike=self.prod.strike, barrier=bound[0],
                                      updown=UpDown.Down, callput=self.prod.callput, inout=InOut.In, rebate=0,
                                      discrete_obs_interval=None,
-                                     engine=AnalyticBarrierEngine(self.process))
+                                     engine=barrier_analytic_engine)
         up_barrier_opposite = BarrierOption(strike=bound[1] ** 2 / self.prod.strike, barrier=bound[1] ** 2 / bound[0],
                                             maturity=tau, rebate=0, inout=InOut.In,
                                             updown=UpDown.Up, callput=opposite_callput,
                                             discrete_obs_interval=None,
-                                            engine=AnalyticBarrierEngine(self.process))
+                                            engine=barrier_analytic_engine)
         down_barrier_opposite = BarrierOption(strike=bound[0] ** 2 / self.prod.strike, barrier=bound[0] ** 2 / bound[1],
                                               maturity=tau, rebate=0, inout=InOut.In,
                                               updown=UpDown.Down, callput=opposite_callput,
                                               discrete_obs_interval=None,
-                                              engine=AnalyticBarrierEngine(self.process))
+                                              engine=barrier_analytic_engine)
         value += (up_barrier.price() + down_barrier.price()
-
                   - up_barrier_opposite.price() * self.prod.strike / bound[1]
                   - down_barrier_opposite.price() * self.prod.strike / bound[0])
 
@@ -195,6 +206,8 @@ class AnalyticDoubleBarrierEngine(AnalyticEngine):
         double_in = min(value, vanilla_option.price())
         if self.prod.inout == InOut.In:
             return double_in * self.prod.parti
-        # else: self.inout == InOut.Out
-        double_out = vanilla_option.price() - double_in
-        return double_out * self.prod.parti
+        elif self.prod.inout == InOut.Out:
+            double_out = vanilla_option.price() - double_in
+            return double_out * self.prod.parti
+        else:
+            raise ValueError("inout只能是InOut.In或InOut.Out")

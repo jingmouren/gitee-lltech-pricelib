@@ -92,23 +92,27 @@ class FdmAutoCallableEngine(FdmEngine):
         if spot is None:
             spot = self.process.spot()
 
-        self.smax = self.n_smax * prod.s0  # 价格网格上界, 默认为n_smax倍初始价格
-
         # 返回PDE系数组件abc的函数
         fn_pde_coef = self.process.get_fn_pde_coef(_maturity, spot)
 
         # 统一已敲入、未敲入矩阵的格点
         self.t_step = round(prod.t_step_per_year * _maturity_business_days)  # 时间步数
-        self.dt = _maturity_business_days / self.t_step  # 时间步长
+        self.dt = 0 if self.t_step == 0 else _maturity_business_days / self.t_step  # 时间步长
         self.j_vec = np.linspace(0, self.t_step, self.t_step + 1)  # 生成时间格点
+
+        if self.t_step == 0:  # 如果估值日是到期日
+            self.smax = smin = spot  # 价格网格上下界都取估值日标的价格 - 直接计算到期日payoff
+        else:
+            smin = 0
+            self.smax = self.n_smax * prod.s0  # 价格网格上界, 默认为n_smax倍初始价格
 
         # 初始化已敲入、未敲入的FdmGrid对象
         self.fd_not_in = FdmGrid(smax=self.smax, maturity=_maturity_business_days,
                                  t_step_per_year=prod.t_step_per_year, s_step=self.s_step,
-                                 fn_pde_coef=fn_pde_coef, fdm_theta=self.fdm_theta)  # 未敲入, [0, smax]
+                                 fn_pde_coef=fn_pde_coef, fdm_theta=self.fdm_theta, smin=smin)  # 未敲入
         self.fd_knockin = FdmGrid(smax=self.smax, maturity=_maturity_business_days,
                                   t_step_per_year=prod.t_step_per_year, s_step=self.s_step,
-                                  fn_pde_coef=fn_pde_coef, fdm_theta=self.fdm_theta)  # 已敲入，[0, smax]
+                                  fn_pde_coef=fn_pde_coef, fdm_theta=self.fdm_theta, smin=smin)  # 已敲入
 
         # 初始化逆序敲出观察日
         if isinstance(obs_dates, (list, np.ndarray)):  # 敲出观察日是具体第n天数的列表，如[11,22,32,43,53,64]
@@ -122,6 +126,14 @@ class FdmAutoCallableEngine(FdmEngine):
 
         # 初始化到期日payoff价值
         self._init_terminal_condition(self.fd_not_in.s_vec, _maturity)
+
+        if self.t_step == 0:  # 如果估值日是到期日
+            # 直接返回到期日payoff
+            if prod.status == StatusType.DownTouch:
+                result = self.fd_knockin.v_grid[1, 0]
+            else:
+                result = self.fd_not_in.v_grid[1, 0]
+            return np.float64(result)
 
         # 初始化已敲入、未敲入的边界条件
         self._init_boundary_condition(self.smax, _maturity)
@@ -181,9 +193,12 @@ class FdmAutoCallableEngine(FdmEngine):
         status = prod.status if status is None else status
         fdm_grid = self.fd_knockin if (status == StatusType.DownTouch) else self.fd_not_in
         f = fdm_grid.functionize(fdm_grid.v_grid[1:-1, t], kind='cubic')
-        g = fdm_grid.functionize(fdm_grid.v_grid[1:-1, t + step], kind='cubic')
-        theta = (g(spot) - f(spot)) / (step * spot)  # ( step * self.dt)
-        return theta
+        try:
+            g = fdm_grid.functionize(fdm_grid.v_grid[1:-1, t + step], kind='cubic')
+            theta = (g(spot) - f(spot))
+            return theta
+        except IndexError:  # 可能遇到到期日估值，无法计算theta
+            return np.nan
 
     def vega(self, prod, t=0, spot=None, step=0.01, status: StatusType = None):
         """vega todo:目前只支持常数波动率"""
@@ -198,7 +213,7 @@ class FdmAutoCallableEngine(FdmEngine):
         self.calc_present_value(prod=prod)
         fdm_grid1 = self.fd_knockin if (status == StatusType.DownTouch) else self.fd_not_in
         g = fdm_grid1.functionize(fdm_grid1.v_grid[1:-1, t], kind='cubic')
-        vega = (g(spot) - f(spot)) / spot
+        vega = (g(spot) - f(spot))
         self.process.vol.volval = last_vol
         self.fd_knockin.v_grid = last_in_grid
         self.fd_not_in.v_grid = last_not_grid
@@ -217,7 +232,7 @@ class FdmAutoCallableEngine(FdmEngine):
         self.calc_present_value(prod=prod)
         fdm_grid1 = self.fd_knockin if (status == StatusType.DownTouch) else self.fd_not_in
         g = fdm_grid1.functionize(fdm_grid1.v_grid[1:-1, t], kind='cubic')
-        rho = (g(spot) - f(spot)) / spot
+        rho = (g(spot) - f(spot))
         self.process.interest.data = last_r
         self.fd_knockin.v_grid = last_in_grid
         self.fd_not_in.v_grid = last_not_grid
@@ -236,10 +251,11 @@ class FdmAutoCallableEngine(FdmEngine):
         pv = np.float64(f(spot))
         delta = (f(min(spot + s_step, self.smax)) - f(min(spot - s_step, self.smax))) / (2 * s_step)
         gamma = (f(spot + s_step) - 2 * f(spot) + f(spot - s_step)) / (s_step ** 2)
-
-        g = fdm_grid.functionize(fdm_grid.v_grid[1:-1, t + 1], kind='cubic')
-        theta = (g(spot) - f(spot)) / (1 * spot)
-
+        if fdm_grid.v_grid.shape[1] > 1:
+            g = fdm_grid.functionize(fdm_grid.v_grid[1:-1, t + 1], kind='cubic')
+            theta = (g(spot) - f(spot))
+        else:
+            theta = np.nan
         last_in_grid = self.fd_knockin.v_grid.copy()
         last_not_grid = self.fd_not_in.v_grid.copy()
 
@@ -248,7 +264,7 @@ class FdmAutoCallableEngine(FdmEngine):
         self.calc_present_value(prod=prod)
         fdm_grid1 = self.fd_knockin if (status == StatusType.DownTouch) else self.fd_not_in
         g1 = fdm_grid1.functionize(fdm_grid1.v_grid[1:-1, t], kind='cubic')
-        vega = (g1(spot) - f(spot)) / spot
+        vega = (g1(spot) - f(spot))
         self.process.vol.volval = last_vol
 
         last_r = self.process.interest.data
@@ -256,7 +272,7 @@ class FdmAutoCallableEngine(FdmEngine):
         self.calc_present_value(prod=prod)
         fdm_grid2 = self.fd_knockin if (status == StatusType.DownTouch) else self.fd_not_in
         g2 = fdm_grid2.functionize(fdm_grid2.v_grid[1:-1, t], kind='cubic')
-        rho = (g2(spot) - f(spot)) / spot
+        rho = (g2(spot) - f(spot))
         self.process.interest.data = last_r
 
         self.fd_knockin.v_grid = last_in_grid
@@ -331,8 +347,7 @@ class FdmAutoCallableEngine(FdmEngine):
         fdm_grid = self.fd_knockin if (status == StatusType.DownTouch) else self.fd_not_in
         if step == 0:
             # 默认PDE模拟时的步长
-            spot = self.process.spot()
-            theta_s_t = np.diff(fdm_grid.v_grid, axis=1) / spot  # / self.dt
+            theta_s_t = np.diff(fdm_grid.v_grid, axis=1)  # / self.dt
             x_vec = np.insert(fdm_grid.s_vec, 0, 0)
             x_vec = np.append(x_vec, self.smax)
             return theta_s_t, x_vec
@@ -432,12 +447,15 @@ class FdmSnowBallEngine(FdmAutoCallableEngine):
             # N天的敲出票息列表，用于生成smax价格上边界条件
             coupon_outs = np.array(self._coupon_out).repeat(
                 np.diff(np.append(np.zeros((1,)), self.out_dates[::-1])).astype(int))
-            self.coupon_outs = np.append(coupon_outs[0], coupon_outs)
+            self.coupon_outs = np.append(self._coupon_out[0], coupon_outs)
         else:
             raise ValueError(f'敲出票息类型为{type(prod.coupon_out)}，仅支持int/float/list/np.ndarray，请检查')
 
         # in_idx：小于到期日敲入线的最大的标的价格索引。如果是变敲入雪球，此变量in_idx应该随敲入价动态调整。
-        self.in_idx = 1 + np.where(s_vec <= self.next_barrier_in)[0][-1] if self.next_barrier_in > 0 else 0
+        if self.next_barrier_in > 0 and s_vec[0] < self.next_barrier_in:
+            self.in_idx = 1 + np.where(s_vec <= self.next_barrier_in)[0][-1]
+        else:
+            self.in_idx = 0
         # out_idxs：大于到期日敲出线的标的价格数组的索引。如果是变敲出雪球，此变量out_idxs应该随敲出价动态调整。
         self.out_idxs = 1 + np.array(np.where(s_vec >= self.next_barrier_out)[0])
         # 虚值call在值度
@@ -452,15 +470,12 @@ class FdmSnowBallEngine(FdmAutoCallableEngine):
                   如果到期大于敲出边界，大于看涨行权价，获得看涨收益、本金和票息；
                                     在敲出边界和看涨行权价之间，获得本金和票息"""
         self.fd_knockin.v_grid[1:-1, self.t_step] = np.where(s_vec < self.next_barrier_out,
-                                                             np.minimum(
-                                                                 np.where(s_vec <= prod.strike_lower, prod.strike_lower,
-                                                                          s_vec) -
-                                                                 prod.strike_upper, 0) + prod.s0 * prod.margin_lvl,
-                                                             np.where(s_vec > prod.strike_call,
-                                                                      (s_vec - prod.strike_call) * prod.parti_out + (
-                                                                              prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0,
-                                                                      (
-                                                                              prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0))
+                                             np.minimum(np.where(s_vec <= prod.strike_lower, prod.strike_lower, s_vec) -
+                                                 prod.strike_upper, 0) + prod.s0 * prod.margin_lvl,
+                                             np.where(s_vec > prod.strike_call,
+                                                      (s_vec - prod.strike_call) * prod.parti_out + (
+                                                           prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0,
+                                                      (prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0))
         """未敲入：如果到期小于敲入边界，在100%本金模式下，小于保底边界，获得保底价；
                                                   大于保底边界，获得实际价格；
                                   在保证金模式下，小于保底边界，支付保底价与期初价之间价差；
@@ -470,24 +485,21 @@ class FdmSnowBallEngine(FdmAutoCallableEngine):
                                           如果在敲出边界和看涨行权价之间，获得本金和敲出票息
                                           如果在敲入边界和敲出边界之间，获得本金和红利票息"""
         self.fd_not_in.v_grid[1:-1, self.t_step] = np.where(s_vec <= self.next_barrier_in,
-                                                            np.where(s_vec <= prod.strike_lower, prod.strike_lower,
-                                                                     s_vec) -
-                                                            prod.strike_upper + prod.s0 * prod.margin_lvl,
-                                                            np.where(s_vec > prod.strike_call,
-                                                                     (s_vec - prod.strike_call) * prod.parti_out + (
-                                                                             prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0,
-                                                                     np.where(s_vec >= self.next_barrier_out,
-                                                                              (
-                                                                                      prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0,
-                                                                              (
-                                                                                      prod.margin_lvl + prod.coupon_div * coupon_t) * prod.s0)))
+                                        np.where(s_vec <= prod.strike_lower, prod.strike_lower, s_vec) -
+                                            prod.strike_upper + prod.s0 * prod.margin_lvl,
+                                        np.where(s_vec > prod.strike_call,
+                                                 (s_vec - prod.strike_call) * prod.parti_out + (
+                                                     prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0,
+                                                 np.where(s_vec >= self.next_barrier_out,
+                                                          (prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0,
+                                                          (prod.margin_lvl + prod.coupon_div * coupon_t) * prod.s0)))
 
     def _backward_induction(self):
         """从倒数第二天向第一天逆向迭代"""
         prod = self.prod
         self.next_diff_obspaydate = self.diff_obs_pay_dates.repeat(
             np.diff(np.append(np.zeros((1,)), self.out_dates[::-1])).astype(int))  # 计息时间数
-        self.next_diff_obspaydate = np.append(self.next_diff_obspaydate[0],
+        self.next_diff_obspaydate = np.append(self.diff_obs_pay_dates[0],
                                               self.next_diff_obspaydate)  # 每个交易日对应的下一个敲出观察日对应的付息日与观察日的自然日年化之差
 
         if prod.in_obs_type == ExerciseType.European:  # 敲入观察为欧式，仅到期观察敲入
@@ -636,12 +648,15 @@ class FdmPhoenixEngine(FdmAutoCallableEngine):
             # N天的敲出票息列表，用于生成smax价格上边界条件
             coupons = np.array(self._coupon).repeat(
                 np.diff(np.append(np.zeros((1,)), self.out_dates[::-1])).astype(int))
-            self.coupons = np.append(coupons[0], coupons)
+            self.coupons = np.append(self._coupon[0], coupons)
         else:
             raise ValueError(f'敲出票息类型为{type(prod.coupon)}，仅支持int/float/list/np.ndarray，请检查')
 
         # in_idx：小于到期日敲入线的最大的标的价格索引。如果是变敲入，此变量in_idx应该随敲入价动态调整。
-        self.in_idx = 1 + np.where(s_vec <= self.next_barrier_in)[0][-1] if self.next_barrier_in > 0 else 0
+        if self.next_barrier_in > 0 and s_vec[0] <= self.next_barrier_in:
+            self.in_idx = 1 + np.where(s_vec <= self.next_barrier_in)[0][-1]
+        else:
+            self.in_idx = 0
         # out_idxs：大于到期日敲出线的标的价格数组的索引。如果是变敲出，此变量out_idxs应该随敲出价动态调整。
         self.out_idxs = 1 + np.array(np.where(s_vec >= self.next_barrier_out)[0])
         # yld_idxs: 大于到期日派息边界位置的标的价格数组的索引。如果是变派息，此变量yld_idxs应该随敲出价动态调整。
@@ -649,7 +664,7 @@ class FdmPhoenixEngine(FdmAutoCallableEngine):
 
         # 矩阵最后一列：到期payoff
         # 已敲入：派息 + 敲入或有亏损 + 预付金
-        self.fd_knockin.v_grid[1:-1, self.t_step] = np.where(s_vec >= self.next_barrier_yield,
+        self.fd_knockin.v_grid[1:-1, self.t_step] = np.where(s_vec > self.next_barrier_yield,
                                                              self.next_coupon * prod.s0,
                                                              0) + \
                                                     np.where(s_vec > prod.strike_upper, 0,
@@ -657,7 +672,7 @@ class FdmPhoenixEngine(FdmAutoCallableEngine):
                                                                        prod.strike_lower) - prod.strike_upper) *
                                                              prod.parti_in) + prod.margin_lvl * prod.s0
         # 未敲入：派息 + 到期敲入或有亏损 + 预付金
-        self.fd_not_in.v_grid[1:-1, self.t_step] = np.where(s_vec >= self.next_barrier_yield,
+        self.fd_not_in.v_grid[1:-1, self.t_step] = np.where(s_vec > self.next_barrier_yield,
                                                             self.next_coupon * prod.s0,
                                                             0) + \
                                                    np.where(s_vec > self.next_barrier_in, 0,

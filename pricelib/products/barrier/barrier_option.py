@@ -74,7 +74,7 @@ class BarrierOption(OptionBase, Observer):
         self._inout = inout
         self._updown = updown
         self.barrier_type = BarrierType.get_category(self._updown, self._inout, self._callput)
-        if payment_type is None:
+        if payment_type is None:  # 敲入默认为到期支付Expire；敲出默认为立即支付Hit
             if self._inout == InOut.In:
                 self.payment_type = PaymentType.Expire
             else:

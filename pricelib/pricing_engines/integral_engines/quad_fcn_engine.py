@@ -29,9 +29,9 @@ class QuadFCNEngine(QuadEngine):
         obs_dates = np.array([num for num in obs_dates if num >= 0]) / prod.t_step_per_year
         # 经过估值日截断的列表，例如prod.barrier_out有22个，存续一年时估值，_barrier_out只有12个
         _barrier_out = prod.barrier_out[-len(obs_dates):].copy()
-        _barrier_in = prod.barrier_in[-len(obs_dates):].copy()
-        _barrier_yield = prod.barrier_yield[-len(obs_dates):].copy()
-        _coupon = prod.coupon[-len(obs_dates):].copy()
+        self._barrier_in = prod.barrier_in[-len(obs_dates):].copy()
+        self._barrier_yield = prod.barrier_yield[-len(obs_dates):].copy()
+        self._coupon = prod.coupon[-len(obs_dates):].copy()
 
         if spot is None:
             spot = self.process.spot()
@@ -40,10 +40,16 @@ class QuadFCNEngine(QuadEngine):
         vol = self.process.vol(_maturity, spot)
         self._check_method_params()
         self.set_quad_params(r=r, q=q, vol=vol)
+
+        if _maturity_business_days == 0:  # 如果估值日就是到期日
+            # 直接计算终止条件
+            value = self._init_terminal_condition(prod, np.array([spot]))[0]
+            return value
+
         if obs_dates[0] == 0:
             # 如果估值日就是敲出观察日
             if spot >= _barrier_out[0]:  # 发生敲出
-                return (prod.margin_lvl + _coupon[0]) * prod.s0
+                return (prod.margin_lvl + self._coupon[0]) * prod.s0
             else:  # 没有发生敲出，则积分迭代步数少一次
                 s0_dt = obs_dates[1]
                 dt_vec = np.diff(obs_dates)[1:]
@@ -55,30 +61,41 @@ class QuadFCNEngine(QuadEngine):
         # 初始化fft的对数价格向量及边界的对数价格向量
         self.init_grid(spot, vol, _maturity_business_days)
         s_vec = np.exp(self.ln_s_vec)
-
         v_grid = np.zeros(shape=(self.n_points, backward_steps + 2))
 
         barrier_out_idx = np.searchsorted(s_vec, _barrier_out, side='right')
-        barrier_yield_idx = np.searchsorted(s_vec, _barrier_yield, side='right')
+        barrier_yield_idx = np.searchsorted(s_vec, self._barrier_yield, side='right')
 
         for step in range(backward_steps + 1, 0, -1):
             if step == backward_steps + 1:  # 设置期末价值状态: 预付金 + 派息 + 到期敲入或有亏损
-                v_grid[:, -1] = (prod.margin_lvl * prod.s0 +
-                                 np.where(s_vec >= _barrier_yield[-1], _coupon[-1] * prod.s0, 0) +
-                                 np.where(s_vec >= _barrier_in[-1], 0, prod.parti_in * (- prod.strike_upper +
-                                          np.where(s_vec > prod.strike_lower, s_vec, prod.strike_lower))))
+                v_grid[:, -1] = self._init_terminal_condition(prod, s_vec)
             else:
                 # 数值积分，计算前一个敲出观察日的期权价值
                 v_grid[:, step] = self.fft_step_backward(self.ln_s_vec, self.ln_s_vec,
                                                          v_grid[:, step + 1], dt_vec[step - 1])
                 # 敲出价之上，发生敲出，返还预付金 + 派息
-                v_grid[barrier_out_idx[step - 1]:, step] = (prod.margin_lvl + _coupon[step - 1]) * prod.s0
+                v_grid[barrier_out_idx[step - 1]:, step] = (prod.margin_lvl + self._coupon[step - 1]) * prod.s0
                 # 派息线之上，敲出价之下，派息
-                v_grid[barrier_yield_idx[step - 1]:barrier_out_idx[step - 1], step] += _coupon[step - 1] * prod.s0
+                v_grid[barrier_yield_idx[step - 1]:barrier_out_idx[step - 1], step] += self._coupon[step - 1] * prod.s0
                 # 派息线之下，不派息
 
         x = np.array([np.log(spot)])
         value = self.fft_step_backward(x, self.ln_s_vec, v_grid[:, 1], s0_dt)[0]
         if obs_dates[0] == 0:  # 如果估值日就是敲出观察日，并且spot位于派息线上、敲出线下，则需要加上派息的价值
-            value += _coupon[0] * prod.s0
+            value += self._coupon[0] * prod.s0
         return value
+
+    def _init_terminal_condition(self, prod, s_vec):
+        """设置期末价值: 预付金 + 派息 + 到期敲入或有亏损
+        Args:
+            prod: Product产品对象
+            s_vec: np.ndarray, 网格的价格格点
+        Returns:
+            payoff: np.ndarray, 期末价值向量
+        """
+        payoff = (prod.margin_lvl * prod.s0 +
+                  np.where(s_vec > self._barrier_yield[-1], self._coupon[-1] * prod.s0, 0) +
+                  np.where(s_vec > self._barrier_in[-1], 0,
+                           prod.parti_in * (- prod.strike_upper + np.where(s_vec > prod.strike_lower,
+                                                                           s_vec, prod.strike_lower))))
+        return payoff

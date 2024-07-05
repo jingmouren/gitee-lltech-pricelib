@@ -99,8 +99,8 @@ class MCAutoCallableEngine(McEngine):
         barrier_out = np.array(self._barrier_out)
         barrier_out = np.tile(barrier_out, (self.n_path, 1)).T
         # 记录每条路径的具体敲出日，如果无敲出则保留inf      注意：路径矩阵包含了期初S0的行
-        knock_out_scenario = np.where(self.s_paths[self.obs_dates] >= barrier_out, knock_out_scenario.astype(int),
-                                      np.inf)
+        knock_out_scenario = np.where(self.s_paths[self.obs_dates] >= barrier_out,
+                                      knock_out_scenario.astype(int), np.inf)
         self.knock_out_date = np.min(knock_out_scenario, axis=0)
         self.not_knock_out = self.knock_out_date == np.inf
 
@@ -111,9 +111,10 @@ class MCAutoCallableEngine(McEngine):
         # 每个交易日敲出票息
         coupon_call_array = np.array(self._coupon_out).repeat(
             np.diff(np.append(np.zeros((1,)), self.obs_dates)).astype(int))
+        coupon_call_array = np.append(self._coupon_out[0], coupon_call_array)
         # 每条路径敲出交易日序列
         knock_out_time = self.knock_out_date[is_knock_out].astype(int)
-        coupon_call = coupon_call_array[knock_out_time - 1]
+        coupon_call = coupon_call_array[knock_out_time]
         # 每个交易日对应的自然日的下一个敲出观察自然日
         next_calendar_day = np.array(self.pay_dates).repeat(
             np.diff(np.append(np.zeros((1,)), self.obs_dates)).astype(int))
@@ -131,13 +132,15 @@ class MCAutoCallableEngine(McEngine):
         elif isinstance(prod.strike_call, (list, np.ndarray)) and len(prod.strike_call) == len(self.obs_dates):
             strike_call_array = (np.array(prod.strike_call)).repeat(
                 np.diff(np.append(np.zeros((1,)), self.obs_dates)).astype(int))
-            strike_call = strike_call_array[knock_out_time - 1]
+            strike_call_array = np.append(prod.strike_call[0], strike_call_array)
+            strike_call = strike_call_array[knock_out_time]
         else:
             raise ValueError("敲出看涨执行价设置错误")
         # 把payoff先折现再求和,计算敲出总所入
         value = np.sum((prod.s0 * (coupon_call * (knock_out_time_annual if not prod.trigger else 1) + prod.margin_lvl)
-                        + prod.parti_out * (self.s_paths[knock_out_time, is_knock_out] - strike_call))
-                       * self.process.interest.disc_factor(knock_out_tau))
+                        + prod.parti_out * np.where(self.s_paths[knock_out_time, is_knock_out] > strike_call,
+                                                    self.s_paths[knock_out_time, is_knock_out] - strike_call, 0))
+                        * self.process.interest.disc_factor(knock_out_tau))
         self.knock_out_profit = value
 
     def _cal_knock_in_scenario(self, *args, **kwargs):
@@ -152,10 +155,11 @@ class MCAutoCallableEngine(McEngine):
             elif isinstance(prod.barrier_in, (list, np.ndarray)):
                 knock_in_level = np.array(self._barrier_in).repeat(
                     np.diff(np.append(np.zeros((1,)), self.obs_dates)).astype(int))
+                knock_in_level = np.append(self._barrier_in[0], knock_in_level)
             else:
                 raise ValueError("敲入线设置错误")
             knock_in_level = np.tile(knock_in_level, (self.n_path, 1)).T
-            self.knock_in_scenario = np.any(self.s_paths[1:] <= knock_in_level, axis=0)
+            self.knock_in_scenario = np.any(self.s_paths <= knock_in_level, axis=0)
 
     def _cal_hold_to_maturity_payoff(self):
         """计算持有到期的payoff"""

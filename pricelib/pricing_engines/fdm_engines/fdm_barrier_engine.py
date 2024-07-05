@@ -318,9 +318,12 @@ class FdmBarrierEngine(FdmEngine):
         status = self.prod.status if status is None else status
         fdm_grid = self.fd_knockin if (status != StatusType.NoTouch) else self.fd_not_in
         f = fdm_grid.functionize(fdm_grid.v_grid[1:-1, t], kind='cubic')
-        g = fdm_grid.functionize(fdm_grid.v_grid[1:-1, t + step], kind='cubic')
-        theta = (g(spot) - f(spot)) / (step * spot)  # ( step * self.dt)
-        return theta
+        try:
+            g = fdm_grid.functionize(fdm_grid.v_grid[1:-1, t + step], kind='cubic')
+            theta = (g(spot) - f(spot))
+            return theta
+        except IndexError:  # 可能遇到到期日估值，无法计算theta
+            return np.nan
 
     def vega(self, prod, t=0, spot=None, step=0.01, status: StatusType = None):
         """计算波动率上升1%的vega todo:目前只支持常数波动率
@@ -342,7 +345,7 @@ class FdmBarrierEngine(FdmEngine):
         self.calc_present_value(prod=prod)
         fdm_grid1 = self.fd_knockin if (status == StatusType.DownTouch) else self.fd_not_in
         g = fdm_grid1.functionize(fdm_grid1.v_grid[1:-1, t], kind='cubic')
-        vega = (g(spot) - f(spot)) / spot
+        vega = (g(spot) - f(spot))
         self.process.vol.volval = last_vol
         self.fd_knockin.v_grid = last_in_grid
         self.fd_not_in.v_grid = last_not_grid
@@ -368,7 +371,7 @@ class FdmBarrierEngine(FdmEngine):
         self.calc_present_value(prod=prod)
         fdm_grid1 = self.fd_knockin if (status == StatusType.DownTouch) else self.fd_not_in
         g = fdm_grid1.functionize(fdm_grid1.v_grid[1:-1, t], kind='cubic')
-        rho = (g(spot) - f(spot)) / spot
+        rho = (g(spot) - f(spot))
         self.process.interest.data = last_r
         self.fd_knockin.v_grid = last_in_grid
         self.fd_not_in.v_grid = last_not_grid
@@ -391,9 +394,11 @@ class FdmBarrierEngine(FdmEngine):
         pv = np.float64(f(spot))
         delta = (f(min(spot + s_step, self.smax)) - f(min(spot - s_step, self.smax))) / (2 * s_step)
         gamma = (f(spot + s_step) - 2 * f(spot) + f(spot - s_step)) / (s_step ** 2)
-
-        g = fdm_grid.functionize(fdm_grid.v_grid[1:-1, t + 1], kind='cubic')
-        theta = (g(spot) - f(spot)) / (1 * spot)
+        if fdm_grid.v_grid.shape[1] > 1:
+            g = fdm_grid.functionize(fdm_grid.v_grid[1:-1, t + 1], kind='cubic')
+            theta = (g(spot) - f(spot))
+        else:
+            theta = np.nan
         with suppress(AttributeError):
             last_in_grid = self.fd_knockin.v_grid.copy()
         last_not_grid = self.fd_not_in.v_grid.copy()
@@ -403,7 +408,7 @@ class FdmBarrierEngine(FdmEngine):
         self.calc_present_value(prod=prod)
         fdm_grid1 = self.fd_knockin if (status != StatusType.NoTouch) else self.fd_not_in
         g1 = fdm_grid1.functionize(fdm_grid1.v_grid[1:-1, t], kind='cubic')
-        vega = (g1(spot) - f(spot)) / spot
+        vega = (g1(spot) - f(spot))
         self.process.vol.volval = last_vol
 
         last_r = self.process.interest.data
@@ -411,7 +416,7 @@ class FdmBarrierEngine(FdmEngine):
         self.calc_present_value(prod=prod)
         fdm_grid2 = self.fd_knockin if (status != StatusType.NoTouch) else self.fd_not_in
         g2 = fdm_grid2.functionize(fdm_grid2.v_grid[1:-1, t], kind='cubic')
-        rho = (g2(spot) - f(spot)) / spot
+        rho = (g2(spot) - f(spot))
         self.process.interest.data = last_r
         with suppress(AttributeError, UnboundLocalError):
             self.fd_knockin.v_grid = last_in_grid
@@ -507,8 +512,7 @@ class FdmBarrierEngine(FdmEngine):
         fdm_grid = self.fd_knockin if (status == StatusType.DownTouch) else self.fd_not_in
         if step == 0:
             # 默认PDE模拟时的步长
-            spot = self.process.spot()
-            theta_s_t = np.diff(fdm_grid.v_grid, axis=1) / spot  # / self.dt
+            theta_s_t = np.diff(fdm_grid.v_grid, axis=1)  # / self.dt
             x_vec = np.insert(fdm_grid.s_vec, 0, 0)
             x_vec = np.append(x_vec, self.smax)
             return theta_s_t, x_vec

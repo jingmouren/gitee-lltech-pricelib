@@ -16,8 +16,8 @@ ignore =
     # line too long, fixed by pylint
     E501,
     # line break before binary operator
+    E722,
+    # use bare 'except'
     W503,
     # line break after binary operator
     W504,
-
-

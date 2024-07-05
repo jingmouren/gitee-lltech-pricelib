@@ -30,7 +30,7 @@ def run():
     # 2. 随机过程，BSM价格动态
     process = GeneralizedBSMProcess(spot=spot_price, interest=riskfree, div=dividend, vol=volatility)
 
-    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分、数值积分
+    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分
     an_engine = AnalyticAirbagEngine(process)
     mc_engine = MCAirbagEngine(process, n_path=100000, rands_method=RandsMethod.LowDiscrepancy,
                                antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0)

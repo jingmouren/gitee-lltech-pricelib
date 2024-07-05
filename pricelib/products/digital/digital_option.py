@@ -104,7 +104,7 @@ class DigitalOption(OptionBase, Observer):
             obs_type = "连续观察"
         else:
             obs_type = "离散观察"
-        return f"{obs_type}{self.exercise_type.value}{self.callput.name}二元期权"
+        return f"{obs_type}{self.payment_type.value}{self.exercise_type.value}{self.callput.name}二元期权"
 
     @time_this
     def price(self, t: datetime.date = None, spot=None):

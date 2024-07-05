@@ -37,7 +37,7 @@ class MCDoubleDigitalEngine(McEngine):
         # 美式：美式双接触/美式双不接触
         if prod.exercise_type == ExerciseType.American:
             if prod.discrete_obs_interval is None:  # 每日观察
-                obs_points = np.arange(0, _maturity_business_days + 1, 1)[1:]
+                obs_points = np.arange(0, _maturity_business_days + 1, 1)
             else:  # 均匀离散观察
                 dt_step = prod.discrete_obs_interval * prod.t_step_per_year
                 obs_points = np.flip(np.round(np.arange(_maturity_business_days, 0, -dt_step)).astype(int))

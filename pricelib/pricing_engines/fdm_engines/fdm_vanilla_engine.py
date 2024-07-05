@@ -48,7 +48,7 @@ class FdmVanillaEngine(FdmEngine):
         elif prod.exercise_type == ExerciseType.American:
             t_step = round(maturity * prod.t_step_per_year)  # 时间格点数
             t_vec = np.linspace(0, maturity, t_step + 1)  # 时间向量
-            dt = (t_vec[-1] - t_vec[0]) / (t_vec.size - 1)  # 时间步长
+            dt = (t_vec[-1] - t_vec[0]) / (t_vec.size - 1) if t_vec.size > 1 else 0  # 时间步长
             fdm = FdmGrid(smax=smax, t_step_per_year=prod.t_step_per_year, s_step=self.s_step, fn_pde_coef=fn_pde_coef,
                           fdm_theta=self.fdm_theta, maturity=maturity)
             fdm.v_grid[0] = fn_callput[0](t_vec)

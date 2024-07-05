@@ -10,7 +10,7 @@ from pricelib import *
 
 def lite():
     """简易定价接口"""
-    option = Phoenix(maturity=2, lock_term=3, s0=100, barrier_out=103, barrier_in=75, barrier_yield=75, coupon=0.0072,
+    option = Phoenix(maturity=2, lock_term=3, s0=100, barrier_out=103, barrier_in=75, barrier_yield=75, coupon=0.0076,
                      s=100, r=0.02, q=0.05, vol=0.16)
     return option.pv_and_greeks()
 
@@ -33,7 +33,7 @@ def run():
 
     # 4. 定义产品：Phoenix(凤凰票据)
     option = Phoenix(maturity=2, s0=100, start_date=datetime.date(2022, 1, 5), trade_calendar=CN_CALENDAR,
-                     barrier_out=103, barrier_in=75, barrier_yield=75, coupon=0.0072, lock_term=3, engine=None,
+                     barrier_out=103, barrier_in=75, barrier_yield=75, coupon=0.0076, lock_term=3, engine=None,
                      status=StatusType.NoTouch)
 
     # 5.为产品设置定价引擎

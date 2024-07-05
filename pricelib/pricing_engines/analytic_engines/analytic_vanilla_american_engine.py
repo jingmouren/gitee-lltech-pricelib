@@ -102,6 +102,8 @@ class AnalyticVanillaAmEngine(AnalyticEngine):
     # pylint: disable=invalid-name, missing-docstring
     def _BAW_1987(self):
         """Barone-Adesi and Whaley (1987)近似解"""
+        if self.T == 0:  # 如果估值日就是到期日
+            return max(self.prod.callput.value * (self.spot - self.prod.strike), 0)
 
         def A(S_star):
             return self.prod.callput.value * (S_star / self.q_star * (

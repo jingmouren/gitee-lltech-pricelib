@@ -29,7 +29,6 @@ def run():
     pde_engine = FdmVanillaEngine(process, s_step=400, n_smax=4, fdm_theta=0.5)
 
     # 4. 定义产品：自定义香草期权组合
-    t_step_per_year = 243
     results = []
     for callput in CallPut:
         port = VanillaPortfolio(trade_calendar=CN_CALENDAR, annual_days=AnnualDays.N365, t_step_per_year=243,

@@ -22,7 +22,6 @@ class QuadSnowballEngine(QuadEngine):
             stoch_process: StochProcessBase，随机过程
             quad_method: 数值积分方法，QuadMethod枚举类，Trapezoid梯形法则/Simpson辛普森法则
             n_points: int，积分点个数 (需要注意，辛普森法则的n_points必须是奇数)
-            n_max: int，价格网格上界，设为n_smax倍初始价格
         在未设置stoch_process时，(stoch_process=None)，会默认创建BSMprocess，需要输入以下变量进行初始化
             s: float，标的价格
             r: float，无风险利率
@@ -107,7 +106,7 @@ class QuadSnowballEngine(QuadEngine):
             raise ValueError('敲出观察日类型设置错误，请检查')
         self.next_diff_obspaydate = self.diff_obs_pay_dates.repeat(
             np.diff(np.append(np.zeros((1,)), self.out_dates[::-1])).astype(int))  # 计息时间数
-        self.next_diff_obspaydate = np.append(self.next_diff_obspaydate[0],
+        self.next_diff_obspaydate = np.append(self.diff_obs_pay_dates[0],
                                               self.next_diff_obspaydate)  # 每个交易日对应的下一个敲出观察日对应的付息日与观察日的自然日年化之差
         # 初始化票息支付日
         self.next_paydate = self.pay_dates.repeat(
@@ -115,7 +114,13 @@ class QuadSnowballEngine(QuadEngine):
         self.next_paydate = np.append(self.pay_dates[0], self.next_paydate)  # 每个交易日对应的下一个敲出观察日对应的付息日
 
         # 设置期末价值状态
-        self._init_terminal_condition(self.s_vec, _maturity)
+        self._init_terminal_condition(self.s_vec)
+
+        if self.backward_steps == 0:  # 如果估值日是到期日
+            if prod.status == StatusType.DownTouch:  # 已敲入
+                return self.v_knock_in[0, 0]
+            else:   # 未敲入
+                return self.v_not_in[0, 0]
 
         if 0 in self.out_dates:
             # 如果估值日就是敲出观察日
@@ -170,13 +175,13 @@ class QuadSnowballEngine(QuadEngine):
                 self.v_not_in[:self.in_idx, j] = self.v_knock_in[:self.in_idx, j]
 
         x = np.array([np.log(spot)])
-        if prod.status == StatusType.NoTouch:
+        if prod.status == StatusType.NoTouch and spot > self.next_barrier_in:
             value = self.fft_step_backward(x, self.ln_s_vec, self.v_not_in[:, 1], self.dt)[0]
         else:
             value = self.fft_step_backward(x, self.ln_s_vec, self.v_knock_in[:, 1], self.dt)[0]
         return value
 
-    def _init_terminal_condition(self, s_vec, maturity):
+    def _init_terminal_condition(self, s_vec):
         """初始化终止时已敲入且未敲出、未敲入且未敲出的期权价值
         Args:
             s_vec: List[float], 网格的价格格点
@@ -226,7 +231,7 @@ class QuadSnowballEngine(QuadEngine):
             # N天的敲出票息列表，用于生成smax价格上边界条件
             coupon_outs = np.array(self._coupon_out).repeat(
                 np.diff(np.append(np.zeros((1,)), self.out_dates[::-1])).astype(int))
-            self.coupon_outs = np.append(coupon_outs[0], coupon_outs)
+            self.coupon_outs = np.append(self._coupon_out[0], coupon_outs)
         else:
             raise ValueError(f'敲出票息类型为{type(prod.coupon_out)}，仅支持int/float/list/np.ndarray，请检查')
 
@@ -249,15 +254,13 @@ class QuadSnowballEngine(QuadEngine):
                   如果到期大于敲出边界，大于看涨行权价，获得看涨收益、本金和票息；
                                     在敲出边界和看涨行权价之间，获得本金和票息"""
         self.v_knock_in[:, -1] = np.where(s_vec < self.next_barrier_out,
-                                             np.minimum(
-                                                 np.where(s_vec <= prod.strike_lower, prod.strike_lower,
-                                                          s_vec) -
-                                                 prod.strike_upper, 0) + prod.s0 * prod.margin_lvl,
-                                             np.where(s_vec > prod.strike_call,
-                                                      (s_vec - prod.strike_call) * prod.parti_out + (
-                                                          prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0,
-                                                      (
-                                                          prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0))
+                                          np.minimum(np.where(s_vec <= prod.strike_lower, prod.strike_lower, s_vec) -
+                                                     prod.strike_upper, 0)
+                                          + prod.s0 * prod.margin_lvl,
+                                          np.where(s_vec > prod.strike_call,
+                                                   (s_vec - prod.strike_call) * prod.parti_out + (
+                                                        prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0,
+                                                   (prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0))
         """未敲入：如果到期小于敲入边界，在100%本金模式下，小于保底边界，获得保底价；
                                                   大于保底边界，获得实际价格；
                                   在保证金模式下，小于保底边界，支付保底价与期初价之间价差；
@@ -267,13 +270,11 @@ class QuadSnowballEngine(QuadEngine):
                                           如果在敲出边界和看涨行权价之间，获得本金和敲出票息
                                           如果在敲入边界和敲出边界之间，获得本金和红利票息"""
         self.v_not_in[:, -1] = np.where(s_vec <= self.next_barrier_in,
-                                           np.where(s_vec <= prod.strike_lower, prod.strike_lower, s_vec) -
-                                           prod.strike_upper + prod.s0 * prod.margin_lvl,
-                                           np.where(s_vec > prod.strike_call,
-                                                    (s_vec - prod.strike_call) * prod.parti_out + (
+                                        np.where(s_vec <= prod.strike_lower, prod.strike_lower, s_vec) -
+                                                 prod.strike_upper + prod.s0 * prod.margin_lvl,
+                                        np.where(s_vec > prod.strike_call,
+                                                 (s_vec - prod.strike_call) * prod.parti_out + (
                                                         prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0,
-                                                    np.where(s_vec >= self.next_barrier_out,
-                                                             (
-                                                         prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0,
-                                                             (
-                                                         prod.margin_lvl + prod.coupon_div * coupon_t) * prod.s0)))
+                                                 np.where(s_vec >= self.next_barrier_out,
+                                                          (prod.margin_lvl + self.next_coupon_out * coupon_t) * prod.s0,
+                                                          (prod.margin_lvl + prod.coupon_div * coupon_t) * prod.s0)))

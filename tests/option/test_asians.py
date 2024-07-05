@@ -19,7 +19,12 @@ def test_asian_demo():
         ['几何平均-代替标的结算价-Call亚式期权', 2.8091532462766367, 2.82014461530082, np.nan],
         ['几何平均-代替标的结算价-Call增强型亚式期权', np.nan, 3.3777986368091546, np.nan],
         ['几何平均-代替标的结算价-Put亚式期权', 4.474255200621862, 4.476119967804266, np.nan],
-        ['几何平均-代替标的结算价-Put增强型亚式期权', np.nan, 5.008070041295551, np.nan]]
+        ['几何平均-代替标的结算价-Put增强型亚式期权', np.nan, 5.008070041295551, np.nan],
+        ['算术平均-代替执行价-Call亚式期权', np.nan, 2.8695188037729253, np.nan],
+        ['算术平均-代替执行价-Put亚式期权', np.nan, 4.316900959109599, np.nan],
+        ['几何平均-代替执行价-Call亚式期权', np.nan, 2.951289642124457, np.nan],
+        ['几何平均-代替执行价-Put亚式期权', np.nan, 4.188063615140271, np.nan]]
+
     expected_df = pd.DataFrame(expected_data, columns=['类型', '闭式解', 'MonteCarlo', '二叉树'])
     res_df = asian_demo.run()
     assert_frame_equal(res_df, expected_df, check_dtype=True)

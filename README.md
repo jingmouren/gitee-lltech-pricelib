@@ -2,6 +2,16 @@
 
 ## 0. 版本更新
 
+- PriceLib 1.2.0: 一些功能更新和bugfix.
+  - 希腊值曲面绘图函数增加x、y轴的等高线，增加视角设置，支持不同密度的价格格点;
+  - 新增logging日志输出设置，控制日志信息是否输出到控制台或log文件;
+  - 新增自动从PyPI检查pricelib是否有新版本的功能;
+  - 单边障碍MC增加了发生敲出时立即支付现金返还的选项;
+  - 二元和障碍期权积分法中，离散观察区间默认为None时，会自动变为每日观察;
+  - 修复二元和障碍期权的解析解在标的价格处于障碍边界外侧时定价结果有误的问题;
+  - 修复部分定价引擎在到期日估值报错或结果有误的问题，为到期日计算Theta添加异常处理;
+  - 修正了凤凰MC在锁定期后定价时触发的bug，修复了小雪球MC在全部路径都未敲出时触发的bug;
+  - BS公式计算希腊值添加调整：Theta和Rho乘以1%，Vega除以365，统一了所有产品的希腊值定义，详见文档中的表格.
 - PriceLib 1.1.0: 使用快速傅里叶变换加速积分法定价引擎计算；增加双鲨积分法；添加参数检查；bugfix.
 - PriceLib 1.0.1: 为产品类添加默认定价引擎.
 - PriceLib 1.0.0: 发布初始版本.
@@ -57,6 +67,7 @@ PriceLib在个人电脑上的定价性能测试结果如下：
 | **FFT Quad耗时**  | 0.090s   | 0.079s   | 0.083s   | 0.087s    | 0.089s    |
 | **Quad与MC相对误差** | 0.232%   | 0.160%   | 0.154%   | 0.045%    | 0.053%    |
 >注: 测试中的MC是没有经过对立变量法等优化的蒙特卡洛模拟。相对误差是以100万条路径MC为基准。
+
 
 我们会持续关注市场上的最新动态，迅速地在PriceLib中更新流行产品的定价模型。如果您有特别的产品定价需求，也可以与我们联系，我们通常可以在两至三天更新至PriceLib中。您可以在Gitee提交Issue，或通过下方电话、邮件联系我们，也欢迎大家扫描下方二维码关注"凌瓴科技"微信公众号。
 
@@ -118,6 +129,17 @@ result = option.pv_and_greeks()
 # result == {'pv': pv, 'delta': delta, 'gamma': gamma, 'vega': vega, 'theta': theta, 'rho': rho}
 ```
 
+pricelib中pv_and_greeks中各项的说明如下：
+
+| **项目名**   | **说明**                                                                                   |
+|-----------|------------------------------------------------------------------------------------------|
+| **pv**    | 挂钩单位数量标的的期权结构的理论估值                                                                       |
+| **delta** | 期权结构的单位理论DeltaStd值，当标的价格上涨1个单位时，挂钩单位数量标的的期权结构的估值变化，通用计算公式为$[f(S+ΔS)-f(S-ΔS)]／2ΔS$ |
+| **gamma** | 期权结构的单位理论GammaStd值，当标的价格上涨1个单位时，DeltaStd的变化值，通用计算公式为$[f(S+ΔS)-2f(S)+f(S-ΔS)]／ΔS^2$  |
+| **vega**  | 当波动率上升1%时，挂钩单位数量标的的期权结构的估值变化                                                             |
+| **theta** | 当期权结构剩余时间减少1个交易日，挂钩单位数量标的的期权结构的估值变化                                                      |
+| **rho**   | 当无风险利率上升1%时，挂钩单位数量标的的期权结构的估值变化                                                           |
+
 再比如较为复杂的雪球结构，"敲出票息10%的一年期锁三103-80平敲雪球"，一样只需两行代码即可完成定价：
 
 ```python
@@ -178,8 +200,8 @@ process = GeneralizedBSMProcess(spot=spot_price, interest=riskfree,
 ```python
 import pandas as pd
 # 从csv文件中读取数据
-div = pd.read_csv("./tests/div.csv")
-loc_vol_df = pd.read_csv("./tests/loc_vol.csv", index_col=0)
+div = pd.read_csv("./tests/resources/div.csv")
+loc_vol_df = pd.read_csv("./tests/resources/loc_vol.csv", index_col=0)
 expirations = loc_vol_df.index.values
 strikes = loc_vol_df.columns.values.astype(float)
 volval = loc_vol_df.values
@@ -210,7 +232,7 @@ process = HestonProcess(spot=spot_price, interest=riskfree, div=dividend,
 其属性包含一个随机过程，以及定价方法参数，例如：
 * Monte Carlo的路径数、随机数种类、方差缩减选项、低差异序列选项、随机数种子
 * PDE有限差分的价格格点数、最大价格边界、有限差分算法(显式/隐式/Crank-Nicolson)
-* 积分法的数值积分方法(梯形法则/辛普森法则)、价格格点数、最大价格边界
+* 积分法的数值积分方法(梯形法则/辛普森法则)、价格格点数
 * 树方法的树分支数
 ```python
 # 3. 定价引擎
@@ -312,7 +334,22 @@ print(option.price())
 ```
 这里使用的是默认的CN_CALENDAR(中国内地交易日历)，年化系数为365和243，如果需要更改，可以在产品对象中设置相关参数。
 
-### 3.4 注意事项
+### 3.4 日志输出设置
+
+pricelib默认将定价引擎通知和计算耗时等日志信息打印到屏幕上。如果您想隐藏这些信息，或者将这些日志保存到log文件中，可以使用`set_logging_handlers`函数修改logging的全局设置，下面是使用示例：
+```python
+from pricelib import *
+# 1. 日志信息既不输出到log文件，也不输出到控制台(忽略所有日志)
+set_logging_handlers(to_file=False, to_console=False)
+# 2. 日志信息只输出到控制台，不输出到log文件(只打印到屏幕上)
+set_logging_handlers(to_file=False, to_console=True)
+# 3. 日志信息只输出到log文件，不输出到控制台，默认路径为工作目录下的./pricelib_test.log
+set_logging_handlers(to_file=True, to_console=False)
+# 4. 日志信息既输出到log文件，也输出到控制台，log_file参数可以自行指定log文件的路径
+set_logging_handlers(to_file=True, to_console=False, log_file='./my_log.log')
+```
+
+### 3.5 注意事项
 
 如果您在运行过定价库的代码之后，移动了定价库的位置，或者更改了定价库内文件夹的名称，这时候可能会出现报错。
 
@@ -362,7 +399,7 @@ PriceLib作为一个核心定价引擎库，没有界面，不太直观，因此
 ![敏感性分析](./docs/pyRisk_3.png)
 
 pyRisk的定位是一个小巧的风险管理的辅助工具，主要目的只是为了展示应用PriceLib的经典场景，您可以通过以下网址免费下载使用pyRisk：  
-https://api.galatech.com.cn/pyRisk/pyRisk_1.0.0_win10_x64.zip  
+https://api.galatech.com.cn/pyRisk/pyRisk_latest_version_win10_x64.zip  
 
 如果对于系统有较高性能和产品定制化特性要求，欢迎与我们联系，试用凌瓴科技采用C++开发的智能风险管理平台iRisk。
 

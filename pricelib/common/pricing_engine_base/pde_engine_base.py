@@ -88,9 +88,13 @@ class FdmEngine(PricingEngineBase, metaclass=ABCMeta):
         """
         spot = self.process.spot() if spot is None else spot
         f = self.fdm.functionize(self.fdm.v_grid[1:-1, t], kind='cubic')
-        g = self.fdm.functionize(self.fdm.v_grid[1:-1, t + step], kind='cubic')
-        theta = (g(spot) - f(spot)) / (step * spot)  # ( step * self.dt)
-        return theta
+        try:
+            g = self.fdm.functionize(self.fdm.v_grid[1:-1, t + step], kind='cubic')
+            theta = (g(spot) - f(spot))
+            return theta
+        except IndexError:  # 可能遇到到期日估值，无法计算theta
+            return np.nan
+
 
     def vega(self, prod, t=0, spot=None, step=0.01):
         """计算波动率上升1%的vega todo:目前只支持常数波动率
@@ -110,7 +114,7 @@ class FdmEngine(PricingEngineBase, metaclass=ABCMeta):
         self.calc_present_value(prod=prod)
         fdm_grid1 = self.fdm
         g = fdm_grid1.functionize(fdm_grid1.v_grid[1:-1, t], kind='cubic')
-        vega = (g(spot) - f(spot)) / spot
+        vega = (g(spot) - f(spot))
         self.process.vol.volval = last_vol
         self.fdm.v_grid = last_grid
         return vega
@@ -133,7 +137,7 @@ class FdmEngine(PricingEngineBase, metaclass=ABCMeta):
         self.calc_present_value(prod=prod)
         fdm_grid1 = self.fdm
         g = fdm_grid1.functionize(fdm_grid1.v_grid[1:-1, t], kind='cubic')
-        rho = (g(spot) - f(spot)) / spot
+        rho = (g(spot) - f(spot))
         self.process.interest.data = last_r
         self.fdm.v_grid = last_grid
         return rho
@@ -154,24 +158,25 @@ class FdmEngine(PricingEngineBase, metaclass=ABCMeta):
         pv = np.float64(f(spot))
         delta = (f(min(spot + s_step, self.smax)) - f(min(spot - s_step, self.smax))) / (2 * s_step)
         gamma = (f(spot + s_step) - 2 * f(spot) + f(spot - s_step)) / (s_step ** 2)
-
-        g = self.fdm.functionize(self.fdm.v_grid[1:-1, t + 1], kind='cubic')
-        theta = (g(spot) - f(spot)) / (1 * spot)
-
+        if self.fdm.v_grid.shape[1] > 1:
+            g = self.fdm.functionize(self.fdm.v_grid[1:-1, t + 1], kind='cubic')
+            theta = (g(spot) - f(spot))
+        else:
+            theta = np.nan
         last_v_grid = self.fdm.v_grid
 
         last_vol = self.process.vol.volval
         self.process.vol.volval = last_vol + 0.01
         self.calc_present_value(prod=prod)
         g1 = self.fdm.functionize(self.fdm.v_grid[1:-1, t], kind='cubic')
-        vega = (g1(spot) - f(spot)) / spot
+        vega = (g1(spot) - f(spot))
         self.process.vol.volval = last_vol
 
         last_r = self.process.interest.data
         self.process.interest.data = last_r + 0.01
         self.calc_present_value(prod=prod)
         g2 = self.fdm.functionize(self.fdm.v_grid[1:-1, t], kind='cubic')
-        rho = (g2(spot) - f(spot)) / spot
+        rho = (g2(spot) - f(spot))
         self.process.interest.data = last_r
 
         self.fdm.v_grid = last_v_grid
@@ -234,8 +239,7 @@ class FdmEngine(PricingEngineBase, metaclass=ABCMeta):
             step: 时间步长，默认为0，即选择PDE有限差分网格的时间步长"""
         if step == 0:
             # 默认PDE模拟时的步长
-            spot = self.process.spot()
-            theta_s_t = np.diff(self.fdm.v_grid, axis=1) / spot  # / self.dt
+            theta_s_t = np.diff(self.fdm.v_grid, axis=1)  # / self.dt
             x_vec = np.insert(self.fdm.s_vec, 0, 0)
             x_vec = np.append(x_vec, self.smax)
             return theta_s_t, x_vec
@@ -248,7 +252,7 @@ class FdmGrid:
     网格的边界是[0, smax]；演化方法是逐天evolve，便于处理敲入覆盖未敲入的值
     适用于离散观察障碍PDE有限差分法定价，这样求得的是离散观察障碍期权的价值"""
 
-    def __init__(self, smax, maturity, t_step_per_year=243, s_step=400, fn_pde_coef=None, fdm_theta=1):
+    def __init__(self, smax, maturity, t_step_per_year=243, s_step=400, fn_pde_coef=None, fdm_theta=1, smin=0):
         """初始化有限差分网格
         注意stdev、fwd、fn_abc以及bound的量纲必须一致，要么都是绝对值，要么都是除以F标准化的相对值
         Args:
@@ -258,18 +262,22 @@ class FdmGrid:
             fn_pde_coef: function，根据时间t和价格向量s_vec，返回PDE系数相关向量a,b,c。设pde有限差分的价格向量索引为i_vec，
                         a是需要乘以i_vec^2的系数，b是需要乘以i_vec的系数，c是不需要乘以i_vec的系数
                         对于BSM而言，a是 vol^2, b是r-q, c是r
-            fdm_theta: float，有限差分时间方向的theta方法，theta=0.5是Crank-Nicolson方法，theta=0是显式Euler方法，theta=1是隐式Euler方法
+            fdm_theta: float，有限差分时间方向的theta方法，theta=0.5是Crank-Nicolson方法，theta=0是显式方法，theta=1是隐式方法
+            smin: float，价格网格下界，默认为0
         """
         self._theta = fdm_theta
         self.t_step_per_year = t_step_per_year  # 每年的时间步数
-        self.s_min = 0  # 价格向量下界
+        self.s_min = smin  # 价格向量下界
         self.s_max = smax  # 价格向量上界
         self.s_vec = np.linspace(self.s_min, self.s_max, int(max(s_step, 50)) + 1)[1:-1]  # s_vec 标的价格向量
         self.ds = (self.s_vec[-1] - self.s_vec[0]) / (self.s_vec.size - 1)  # 价格步长
         num = round(maturity * self.t_step_per_year)  # 时间格点数
         self.tv = np.linspace(0, maturity, num + 1)  # 时间向量
-        self.dt = (self.tv[-1] - self.tv[0]) / (self.tv.size - 1)  # 时间步长
-        self.i_vec = np.round(self.s_vec / self.ds).astype(int)  # s_vec 对应的索引向量 (1,2,...,s_step) 不含边界0和s_step
+        self.dt = (self.tv[-1] - self.tv[0]) / (self.tv.size - 1) if self.tv.size > 1 else 0  # 时间步长
+        if self.ds == 0:
+            self.i_vec = None
+        else:
+            self.i_vec = np.round(self.s_vec / self.ds).astype(int)  # s_vec 对应的索引向量 (1,2,...,s_step) 不含边界0和s_step
         self.fn_pde_coef = fn_pde_coef  # PDE系数函数，如果是倒向PDE，a是BSM的(sigma*S)^2, b是BSM的(r-q)*S,c是r
         self.eye = sparse.eye(self.s_vec.size)  # 单位矩阵
         self.v_grid = np.zeros((self.s_vec.size + 2, self.tv.size))  # 初始化一个零矩阵，用于记录每个时间t对应的期权价值向量

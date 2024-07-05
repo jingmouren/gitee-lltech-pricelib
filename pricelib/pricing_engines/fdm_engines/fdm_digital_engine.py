@@ -53,9 +53,11 @@ class FdmDigitalEngine(FdmEngine):
         if self.prod.payment_type == PaymentType.Hit:  # 触碰障碍立即支付
             def func_bound(u):
                 return bound_flag * rebate
-        else:  # 'PaymentMethod.Expire' 触碰障碍后，到期时支付
+        elif self.prod.payment_type == PaymentType.Expire:  # 触碰障碍后，到期时支付
             def func_bound(u):
                 return bound_flag * rebate * self.process.interest.disc_factor(maturity, u)
+        else:
+            raise ValueError("Unsupported payment type: {}".format(self.prod.payment_type))
         return func_bound
 
     def _init_boundary_condition(self, maturity):
@@ -133,6 +135,23 @@ class FdmDigitalEngine(FdmEngine):
 
         if prod.exercise_type == ExerciseType.American:
             if prod.discrete_obs_interval is None:  # 连续观察美式
+                # 如果估值时的标的价格已经触碰行权价，直接返回行权收益的现值
+                if spot <= self.bound[0] or spot >= self.bound[1]:
+                    if prod.touch_type == TouchType.Touch:  # 双接触
+                        if spot <= self.bound[0]:
+                            rebate_v = self.rebate[0]
+                        elif spot >= self.bound[1]:
+                            rebate_v = self.rebate[1]
+                        else:
+                            raise ValueError(f"价格{spot}在障碍价区间{self.bound}内")
+                        if prod.payment_type == PaymentType.Expire:  # 到期支付
+                            rebate_v *= self.process.interest.disc_factor(_maturity)
+                        return rebate_v
+                    elif prod.touch_type == TouchType.NoTouch:  # 双不接触
+                        return 0
+                    else:
+                        raise ValueError(f"{prod.touch_type}必须是TouchType.Touch或TouchType.NoTouch")
+
                 self.fdm = FdmGridwithBound(smax=self.smax, t_step_per_year=prod.t_step_per_year, s_step=self.s_step,
                                             fn_pde_coef=fn_pde_coef, bound=self.bound, fdm_theta=self.fdm_theta)
                 self._init_boundary_condition(_maturity)
@@ -162,17 +181,18 @@ class FdmDigitalEngine(FdmEngine):
                 self.fdm.v_grid[1:-1, -1] = yv
 
                 for j in range(t_step - 1, -1, -1):
-                    yv = self.fdm.evolve(j, yv, dt)  # 每组(p, q)更新
+                    yv = self.fdm.evolve(j, yv, dt)
                     if j in obs_points:
                         if prod.touch_type == TouchType.Touch:
                             if prod.payment_type == PaymentType.Expire:  # 到期支付
-                                yv[lower] = self.rebate[0] * self.process.interest.disc_factor(_maturity,
-                                                                                            j / t_step * _maturity)
-                                yv[upper] = self.rebate[1] * self.process.interest.disc_factor(_maturity,
-                                                                                            j / t_step * _maturity)
-                            else:  # 立即支付
+                                discount = self.process.interest.disc_factor(_maturity, j / t_step * _maturity)
+                                yv[lower] = self.rebate[0] * discount
+                                yv[upper] = self.rebate[1] * discount
+                            elif prod.payment_type == PaymentType.Hit:  # 立即支付
                                 yv[lower] = self.rebate[0]
                                 yv[upper] = self.rebate[1]
+                            else:
+                                raise ValueError("Unsupported payment type: {}".format(prod.payment_type))
                         else:
                             yv[lower] = 0
                             yv[upper] = 0

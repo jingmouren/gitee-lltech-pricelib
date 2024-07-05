@@ -94,7 +94,7 @@ class AutocallableBase(OptionBase, Observer):
         self.margin_lvl = margin_lvl  # 预付金比例
         self.strike_upper = s0 if strike_upper is None else strike_upper  # 敲入后高执行价
         self.strike_lower = strike_lower  # 低行权价
-        self.strike_call = s0 if strike_call is None else strike_call  # 敲出看涨执行价
+        self.strike_call = 4 * s0 if strike_call is None else strike_call  # 敲出看涨执行价
         if obs_dates is None:  # 观察日列表
             self.obs_dates = Schedule(trade_calendar=trade_calendar, start=self.start_date, end=self.end_date,
                                       freq='m', lock_term=lock_term)

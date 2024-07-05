@@ -30,6 +30,16 @@ class AnalyticAssetOrNothingEngine(AnalyticEngine):
         if spot is None:
             spot = self.process.spot()
 
+        if tau == 0:  # 如果估值日就是到期日，直接计算payoff
+            if prod.callput == CallPut.Call:  # 向上
+                value = spot if spot >= prod.strike else 0
+                return value
+            elif prod.callput == CallPut.Put:  # 向下
+                value = spot if spot <= prod.strike else 0
+                return value
+            else:
+                raise ValueError("Invalid callput type")
+
         r = self.process.interest(tau)
         q = self.process.div(tau)
         vol = self.process.vol(tau, spot)
@@ -48,8 +58,10 @@ class AnalyticAssetOrNothingEngine(AnalyticEngine):
                 # 指数上的beta = -zeta(1/2) / sqrt(2*pi) = 0.5826, 其中zeta是黎曼zeta函数
                 if prod.callput == CallPut.Call:  # 向上
                     strike = prod.strike * np.exp(0.5826 * vol * np.sqrt(prod.discrete_obs_interval))
-                else:  # self.callput == CallPut.Put:  # 向下
+                elif prod.callput == CallPut.Put:  # 向下
                     strike = prod.strike * np.exp(-0.5826 * vol * np.sqrt(prod.discrete_obs_interval))
+                else:
+                    raise ValueError("Invalid callput type")
             else:  # 连续观察
                 strike = prod.strike
             K_S = strike / spot
@@ -61,11 +73,13 @@ class AnalyticAssetOrNothingEngine(AnalyticEngine):
                                          mu - lambda_) * norm.cdf(
                     -prod.callput.value * (np.log(K_S) / denominator - lambda_ * denominator)))
             # 美式，到期支付
-            # else:  self.payment_type == PaymentType.Expire:
-            return spot * np.exp(-q * tau) * (
-                    norm.cdf((numerator * tau - np.log(K_S)) / denominator * prod.callput.value) +
-                    K_S ** (2 * mu + 2) * norm.cdf(
-                        -(numerator * tau + np.log(K_S)) / denominator * prod.callput.value))
+            elif prod.payment_type == PaymentType.Expire:
+                return spot * np.exp(-q * tau) * (
+                        norm.cdf((numerator * tau - np.log(K_S)) / denominator * prod.callput.value) +
+                        K_S ** (2 * mu + 2) * norm.cdf(
+                            -(numerator * tau + np.log(K_S)) / denominator * prod.callput.value))
+            else:
+                raise ValueError("Invalid payment type")
         # 观察方式既不是欧式也不是美式
         raise NotImplementedError(
             f"ExerciseType {prod.exercise_type.value}不支持的观察方式，仅支持欧式观察或美式观察.")

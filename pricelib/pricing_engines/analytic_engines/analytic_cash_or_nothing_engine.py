@@ -4,6 +4,7 @@
 Copyright (C) 2024 Galaxy Technologies
 Licensed under the Apache License, Version 2.0
 """
+import math
 import numpy as np
 from scipy.stats import norm
 from pricelib.common.utilities.enums import CallPut, ExerciseType, PaymentType
@@ -29,6 +30,7 @@ class AnalyticCashOrNothingEngine(AnalyticEngine):
         tau = prod.trade_calendar.business_days_between(calculate_date, prod.end_date) / prod.t_step_per_year
         if spot is None:
             spot = self.process.spot()
+
         r = self.process.interest(tau)
         q = self.process.div(tau)
         vol = self.process.vol(tau, spot)
@@ -39,8 +41,23 @@ class AnalyticCashOrNothingEngine(AnalyticEngine):
         denominator = vol * np.sqrt(tau)
         # 欧式
         if prod.exercise_type == ExerciseType.European:
+            if tau == 0:  # 如果估值日是到期日
+                if (prod.callput == CallPut.Call and spot >= prod.strike) or (
+                        prod.callput == CallPut.Put and spot <= prod.strike):
+                    return prod.rebate
             return prod.rebate * np.exp(-r * tau) * norm.cdf(prod.callput.value * (v * tau - np.log(K_S)) / denominator)
         if prod.exercise_type == ExerciseType.American:
+            # 如果估值时的标的价格已经触碰行权价，直接返回行权收益的现值
+            if (prod.callput == CallPut.Call and spot >= prod.strike) or (
+                    prod.callput == CallPut.Put and spot <= prod.strike):
+                if prod.payment_type == PaymentType.Hit:
+                    rebate_v = prod.rebate
+                elif prod.payment_type == PaymentType.Expire:
+                    rebate_v = prod.rebate * math.exp(-r * tau)
+                else:
+                    raise ValueError("Invalid payment type")
+                return rebate_v
+
             # 离散观察期权，M. Broadie, P. Glasserman, S.G. Kou(1999) 在连续观察期权解析解上加调整项
             if prod.discrete_obs_interval is not None:
                 if prod.callput == CallPut.Call:  # 向上

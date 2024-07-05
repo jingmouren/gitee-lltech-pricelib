@@ -10,7 +10,7 @@ from pricelib import *
 
 def lite():
     """简易定价接口"""
-    option = DCN(maturity=2, lock_term=3, s0=100, barrier_out=103, barrier_in=80, barrier_yield=80, coupon=0.004,
+    option = DCN(maturity=2, lock_term=3, s0=100, barrier_out=103, barrier_in=80, barrier_yield=80, coupon=0.00387,
                  s=100, r=0.02, q=0.04, vol=0.16)
     return option.pv_and_greeks()
 
@@ -25,7 +25,7 @@ def run():
     volatility = BlackConstVol(0.16, name="中证1000波动率")
     # 2. 随机过程，BSM价格动态
     process = GeneralizedBSMProcess(spot=spot_price, interest=riskfree, div=dividend, vol=volatility)
-    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分、数值积分
+    # 3. 定价引擎，包括蒙特卡洛模拟、有限差分、数值积分
     mc_engine = MCPhoenixEngine(process, n_path=100000, rands_method=RandsMethod.Pseudorandom,
                                 antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0)
     quad_engine = QuadFCNEngine(process, quad_method=QuadMethod.Simpson, n_points=1301)
@@ -33,7 +33,7 @@ def run():
 
     # 4. 定义产品：DCN(Digital Coupon Note 二元派息票据)
     option = DCN(maturity=2, s0=100, start_date=datetime.date(2022, 1, 5), trade_calendar=CN_CALENDAR,
-                 barrier_out=103, barrier_in=80, strike_upper=None, barrier_yield=80, coupon=0.004, lock_term=3,
+                 barrier_out=103, barrier_in=80, strike_upper=None, barrier_yield=80, coupon=0.00387, lock_term=3,
                  engine=None, status=StatusType.NoTouch, t_step_per_year=243)
 
     # 5.为产品设置定价引擎

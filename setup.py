@@ -5,7 +5,7 @@ with open('README.md', 'r', encoding='utf-8') as fh:
 
 setup(
     name='pricelib',
-    version='1.1.1',
+    version='1.1.2',
     packages=find_packages(),
     description='pricelib is an open-source financial derivatives pricing library written in Python.',
     long_description=long_description,
@@ -20,6 +20,7 @@ setup(
         'pandas>=2.0.3, <=2.2.2',
         'rocket-fft~=0.2',
         'importlib-metadata>=6.8.0, <=7.1.0',
+        'requests',
     ],
     extras_require={
         'dev': [

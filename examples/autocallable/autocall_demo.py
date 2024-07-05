@@ -5,7 +5,6 @@ Copyright (C) 2024 Galaxy Technologies
 Licensed under the Apache License, Version 2.0
 """
 import datetime
-import numpy as np
 import pandas as pd
 from pricelib import *
 
@@ -27,7 +26,7 @@ def run():
     volatility = BlackConstVol(0.2, name="中证1000波动率")
     # 2. 随机过程，BSM价格动态
     process = GeneralizedBSMProcess(spot=spot_price, interest=riskfree, div=dividend, vol=volatility)
-    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分、数值积分
+    # 3. 定价引擎，包括蒙特卡洛模拟、有限差分、数值积分
     mc_engine = MCAutoCallEngine(process, n_path=100000, rands_method=RandsMethod.Pseudorandom,
                                  antithetic_variate=False, ld_method=LdMethod.Halton, seed=0)
     quad_engine = QuadAutoCallEngine(process, quad_method=QuadMethod.Simpson, n_points=1301)
@@ -43,7 +42,9 @@ def run():
         price_mc = option.price()
 
         option.set_pricing_engine(pde_engine)
-        price_pde = option.price() if callput == CallPut.Call else np.nan
+        price_pde = option.price()
+        print({"price_pde": price_pde, "delta": option.delta(), "gamma": option.gamma(), "vega": option.vega(),
+               "theta": option.theta(), "rho": option.rho()})
 
         option.set_pricing_engine(quad_engine)
         price_quad = option.price()

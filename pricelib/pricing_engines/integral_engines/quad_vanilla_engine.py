@@ -27,6 +27,10 @@ class QuadVanillaEngine(QuadEngine):
         if spot is None:
             spot = self.process.spot()
 
+        if tau == 0:  # 如果估值日是到期日
+            value = max(prod.callput.value * (spot - prod.strike), 0)
+            return value
+
         r = self.process.interest(tau)
         q = self.process.div(tau)
         vol = self.process.vol(tau, spot)

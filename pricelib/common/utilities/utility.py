@@ -6,11 +6,45 @@ Licensed under the Apache License, Version 2.0
 """
 import time
 from functools import wraps
+import sys
 import logging
 import numpy as np
 
+# 创建一个handler，用于输出到控制台
+ch = logging.StreamHandler(sys.stdout)
+# 创建一个NullHandler，它不会做任何处理，只是简单地忽略所有的日志消息
+nh = logging.NullHandler()
+# 默认只将日志输出到控制台
 logging.basicConfig(format='%(asctime)s - %(levelname)s: %(message)s',  # - %(pathname)s[line:%(lineno)d]
                     level=logging.INFO)
+
+
+def set_logging_handlers(to_file=False, to_console=True, log_file: str = None):
+    """更改 logging 模块的 handlers，控制是否将日志打印到屏幕上、log文件中、或者不打印任何日志
+        例如，只输出到log文件，不输出到控制台：set_logging_handlers(to_file=True, to_console=False, log_file='./my_log.log')
+             既不输出到log文件，也不输出到控制台: set_logging_handlers(to_file=False, to_console=False)
+    Args:
+        to_file: bool, 是否将日志打印到文件中
+        to_console: bool, 是否将日志打印到屏幕上
+        log_file: str, log文件的路径，默认为None，即默认使用"./pricelib_test.log"
+    """
+    # 获取root logger
+    logger = logging.getLogger()
+    # 清除所有handler
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+    # 设置新的handler
+    if to_file:  # 输出到log文件
+        # 创建一个handler，用于写入日志文件
+        if log_file is not None:  # 自定义log文件路径
+            fh = logging.FileHandler(log_file, encoding='utf-8')
+        else:
+            fh = logging.FileHandler('./pricelib_test.log', encoding='utf-8')
+        logger.addHandler(fh)
+    if to_console:  # 输出到控制台
+        logger.addHandler(ch)
+    if not to_file and not to_console:  # 不输出日志
+        logger.addHandler(nh)
 
 
 def time_this(fn):

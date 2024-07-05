@@ -46,6 +46,12 @@ class QuadDoubleSharkEngine(QuadEngine):
         tau = prod.trade_calendar.business_days_between(calculate_date, prod.end_date) / prod.t_step_per_year
         if spot is None:
             spot = self.process.spot()
+
+        if tau == 0:  # 如果估值日就是到期日
+            # 直接计算终止条件
+            value = self._init_terminal_condition(prod, np.array([spot]))[0]
+            return value
+
         r = self.process.interest(tau)
         q = self.process.div(tau)
         vol = self.process.vol(tau, spot)
@@ -61,10 +67,7 @@ class QuadDoubleSharkEngine(QuadEngine):
         s_vec = np.exp(self.ln_s_vec)
         # 从后向前进行积分计算
         # 设定期末价值，在障碍价格内侧，默认设定未敲入，未敲出
-        call_put_payoff = (np.maximum(s_vec - prod.strike[1], 0) * prod.parti[1] +
-                           np.maximum(prod.strike[0] - s_vec, 0) * prod.parti[0])
-        v_vec = np.where(s_vec >= prod.bound[1], prod.rebate[1],
-                         np.where(s_vec <= prod.bound[0], prod.rebate[0], call_put_payoff))
+        v_vec = self._init_terminal_condition(prod, s_vec)
 
         for step in range(self.backward_steps - 1, 0, -1):
             quad_range, upper_an_range, lower_an_range = self.set_quad_price_range(s_vec)
@@ -79,3 +82,19 @@ class QuadDoubleSharkEngine(QuadEngine):
         x = np.log(np.array([spot]))
         value = self.fft_step_backward(x, self.ln_s_vec, v_vec, dt)[0]
         return value
+
+    @staticmethod
+    def _init_terminal_condition(prod, s_vec):
+        """初始化终止时的期权价值，在障碍价格内侧，默认设定未敲入，未敲出
+        Args:
+            prod: Product产品对象
+            s_vec: np.ndarray, 网格的价格格点
+        Returns:
+            payoff: np.ndarray, 期末价值向量
+        """
+        # 设定期末价值，在障碍价格内侧，默认设定未敲入，未敲出
+        call_put_payoff = (np.maximum(s_vec - prod.strike[1], 0) * prod.parti[1] +
+                           np.maximum(prod.strike[0] - s_vec, 0) * prod.parti[0])
+        v_vec = np.where(s_vec >= prod.bound[1], prod.rebate[1],
+                         np.where(s_vec <= prod.bound[0], prod.rebate[0], call_put_payoff))
+        return v_vec

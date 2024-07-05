@@ -10,8 +10,8 @@ from pricelib import *
 
 if __name__ == '__main__':
     # 1. 从csv文件中读取div和局部波动率loc_vol数据
-    div = pd.read_csv("../../tests/div.csv")
-    loc_vol_df = pd.read_csv('../../tests/loc_vol.csv', index_col=0)
+    div = pd.read_csv("../../tests/resources/div.csv")
+    loc_vol_df = pd.read_csv('../../tests/resources/loc_vol.csv', index_col=0)
     # 2. 市场数据，包括标的物价格、无风险利率、分红率、波动率
     spot_price = SimpleQuote(value=2.367, name="510050.SH")
     riskfree = ConstantRate(value=0.02, name="无风险利率")
@@ -33,8 +33,8 @@ if __name__ == '__main__':
     t_step_per_year = 243
     results = []
     exercise_type = ExerciseType.European
-    strike_arr = np.load('../../tests/strike.npy')
-    maturity_arr = np.load('../../tests/maturity.npy')
+    strike_arr = np.load('../../tests/resources/strike.npy')
+    maturity_arr = np.load('../../tests/resources/maturity.npy')
     for callput in CallPut:
         for maturity in maturity_arr:
             for strike in strike_arr:
@@ -52,5 +52,5 @@ if __name__ == '__main__':
                 results.append([f"{option.callput.name}", f"{maturity}", f"{strike}", price_mc, price_pde])
 
     df = pd.DataFrame(results, columns=['类型', '到期日', '行权价', 'LV_MC', 'LV_PDE'])
-    df['MKT'] = pd.read_csv('../../tests/mkt_vanilla_price.csv')['close'].values
+    df['MKT'] = pd.read_csv('../../tests/resources/mkt_vanilla_price.csv')['close'].values
     print(df)

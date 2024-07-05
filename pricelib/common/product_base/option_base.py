@@ -65,7 +65,7 @@ class OptionBase(metaclass=ABCMeta):
         """
         try:
             return self.engine.delta(prod=self, spot=spot, step=step, *args, **kwargs)
-        except AttributeError:
+        except:
             self.validate_parameters()
             spot = self.engine.process.spot() if spot is None else spot
             step = spot * 0.01 if step is None else step
@@ -84,7 +84,7 @@ class OptionBase(metaclass=ABCMeta):
         """
         try:
             return self.engine.gamma(prod=self, spot=spot, step=step, *args, **kwargs)
-        except AttributeError:
+        except:
             self.validate_parameters()
             spot = self.engine.process.spot() if spot is None else spot
             step = spot * 0.01 if step is None else step
@@ -105,7 +105,7 @@ class OptionBase(metaclass=ABCMeta):
         """
         try:
             return self.engine.vega(prod=self, spot=spot, step=step, *args, **kwargs)
-        except AttributeError:
+        except:
             self.validate_parameters()
             spot = self.engine.process.spot() if spot is None else spot
             last_vol = self.engine.process.vol.volval
@@ -113,7 +113,7 @@ class OptionBase(metaclass=ABCMeta):
             self.engine.process.vol.volval = last_vol + step
             new_price = self.price(spot=spot)
             self.engine.process.vol.volval = last_vol
-            vega = (new_price - last_price) / spot
+            vega = (new_price - last_price)
             return vega
 
     def theta(self, spot=None, step=1, *args, **kwargs):
@@ -127,15 +127,20 @@ class OptionBase(metaclass=ABCMeta):
         """
         try:
             return self.engine.theta(prod=self, spot=spot, step=step, *args, **kwargs)
-        except AttributeError:
-            self.validate_parameters()
-            spot = self.engine.process.spot() if spot is None else spot
-            step = datetime.timedelta(days=step)
-            origin_price = self.price(spot=spot)
-            next_date = self.trade_calendar.advance(global_evaluation_date(), step)
-            new_price = self.price(t=next_date, spot=spot)
-            theta = (new_price - origin_price) / spot
-            return theta
+        except:
+            try:
+                spot = self.engine.process.spot() if spot is None else spot
+                step = datetime.timedelta(days=step)
+                origin_price = self.price(spot=spot)
+                next_date = self.trade_calendar.advance(global_evaluation_date(), step)
+                new_price = self.price(t=next_date, spot=spot)
+                theta = (new_price - origin_price)
+                return theta
+            except:  # 可能遇到到期日估值，无法计算theta
+                calculate_date = global_evaluation_date()
+                if calculate_date > self.trade_calendar.advance(self.end_date, datetime.timedelta(days=1)):
+                    raise ValueError(f"估值日必须小于等于到期日, 当前估值日为{calculate_date}, 到期日为{self.end_date}.")
+                return np.nan  # 到期日估值，无法计算theta,返回nan
 
     def rho(self, spot=None, step=0.01, *args, **kwargs):
         """计算无风险利率上升1%的rho todo:目前只支持常数无风险利率
@@ -148,7 +153,7 @@ class OptionBase(metaclass=ABCMeta):
         """
         try:
             return self.engine.rho(prod=self, spot=spot, step=step, *args, **kwargs)
-        except AttributeError:
+        except:
             self.validate_parameters()
             spot = self.engine.process.spot() if spot is None else spot
             last_r = self.engine.process.interest.data
@@ -156,7 +161,7 @@ class OptionBase(metaclass=ABCMeta):
             self.engine.process.interest.data = last_r + step
             new_price = self.price(spot=spot)
             self.engine.process.interest.data = last_r
-            rho = (new_price - last_price) / spot
+            rho = (new_price - last_price)
             return rho
 
     def pv_and_greeks(self, spot=None, *args, **kwargs):
@@ -169,7 +174,7 @@ class OptionBase(metaclass=ABCMeta):
             Dict[str:float]: {'pv': pv, 'delta': delta, 'gamma': gamma, 'theta': theta, 'vega': vega, 'rho': rho}
         """
         if hasattr(self.engine, "pv_and_greeks"):
-            with suppress(AttributeError):
+            with suppress(AttributeError, ValueError):
                 self.price()
                 return self.engine.pv_and_greeks(prod=self, spot=spot, *args, **kwargs)
         self.validate_parameters()
@@ -185,16 +190,19 @@ class OptionBase(metaclass=ABCMeta):
         self.engine.process.vol.volval = last_vol + 0.01
         new_price = self.price(spot=spot)
         self.engine.process.vol.volval = last_vol
-        vega = (new_price - pv) / spot
+        vega = (new_price - pv)
 
         last_r = self.engine.process.interest.data
         self.engine.process.interest.data = last_r + 0.01
         new_price = self.price(spot=spot)
         self.engine.process.interest.data = last_r
-        rho = (new_price - pv) / spot
+        rho = (new_price - pv)
 
-        t_step = datetime.timedelta(days=1)
-        next_date = self.trade_calendar.advance(global_evaluation_date(), t_step)
-        new_price = self.price(t=next_date, spot=spot)
-        theta = (new_price - pv) / spot
+        try:  # 可能遇到到期日估值，无法计算theta
+            t_step = datetime.timedelta(days=1)
+            next_date = self.trade_calendar.advance(global_evaluation_date(), t_step)
+            new_price = self.price(t=next_date, spot=spot)
+            theta = (new_price - pv)
+        except:
+            theta = np.nan
         return {'pv': pv, 'delta': delta, 'gamma': gamma, 'vega': vega, 'theta': theta, 'rho': rho}

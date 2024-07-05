@@ -32,7 +32,7 @@ def run():
     volatility = BlackConstVol(0.2, name="中证1000波动率")
     # 2. 随机过程，BSM价格动态
     process = GeneralizedBSMProcess(spot=spot_price, interest=riskfree, div=dividend, vol=volatility)
-    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分、数值积分
+    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分
     an_engine = AnalyticDoubleDigitalEngine(process, series_num=10)
     mc_engine = MCDoubleDigitalEngine(process, n_path=100000, rands_method=RandsMethod.Pseudorandom,
                                       antithetic_variate=False, ld_method=LdMethod.Halton, seed=0)

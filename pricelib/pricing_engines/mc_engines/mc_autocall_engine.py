@@ -22,11 +22,10 @@ class MCAutoCallEngine(McEngine):
         Returns: float，现值
         """
         calculate_date = global_evaluation_date() if t is None else t
-        _maturity = (prod.end_date - calculate_date).days / prod.annual_days.value
         _maturity_business_days = prod.trade_calendar.business_days_between(calculate_date, prod.end_date)
         obs_dates = prod.obs_dates.count_business_days(calculate_date)
         obs_dates = np.array([num for num in obs_dates if num >= 0])
-        # 支付日 - 计算起始日到支付日的天数，用于计算应支付的敲出收益
+        # 支付日 - 计算起始日到支付日的天数，并转化为年化时间，用于计算应支付的敲出收益
         calculate_start_diff = (calculate_date - prod.start_date).days
         pay_dates = prod.pay_dates.count_calendar_days(prod.start_date)
         pay_dates = np.array([num / prod.annual_days.value for num in pay_dates if num >= calculate_start_diff])
@@ -57,20 +56,23 @@ class MCAutoCallEngine(McEngine):
         knock_out_date = np.min(knock_out_scenario, axis=0)
         is_knock_out = knock_out_date != np.inf
         # 红利票息
-        hold_payoff = ((self.n_path - np.sum(is_knock_out)) * prod.s0 * (prod.coupon_div * _maturity
-                       + prod.margin_lvl) * self.process.interest.disc_factor(_maturity))
+        hold_payoff = ((self.n_path - np.sum(is_knock_out)) * prod.s0 * (prod.coupon_div * pay_dates[-1]
+                       + prod.margin_lvl) * self.process.interest.disc_factor(pay_dates_tau[-1]))
         # 敲出部分
         # 敲出对应计息时长
         obs_to_pay = dict(zip(obs_dates, pay_dates))
-        pay_dates_vec = np.vectorize(obs_to_pay.get)(knock_out_date[is_knock_out])
-        # 敲出对应折现时长
-        obs_to_pay_tau = dict(zip(obs_dates, pay_dates_tau))
-        pay_dates_tau_vec = np.vectorize(obs_to_pay_tau.get)(knock_out_date[is_knock_out])
-        # 敲出对应票息
-        obs_to_coupon = dict(zip(obs_dates, _coupon_out))
-        coupon_out = np.vectorize(obs_to_coupon.get)(knock_out_date[is_knock_out])
-        # 敲出部分的收益
-        knock_out_payoff = np.sum(prod.s0 * (coupon_out * pay_dates_vec + prod.margin_lvl)
-                                  * self.process.interest.disc_factor(pay_dates_tau_vec))
+        if any(is_knock_out):
+            pay_dates_vec = np.vectorize(obs_to_pay.get)(knock_out_date[is_knock_out])
+            # 敲出对应折现时长
+            obs_to_pay_tau = dict(zip(obs_dates, pay_dates_tau))
+            pay_dates_tau_vec = np.vectorize(obs_to_pay_tau.get)(knock_out_date[is_knock_out])
+            # 敲出对应票息
+            obs_to_coupon = dict(zip(obs_dates, _coupon_out))
+            coupon_out = np.vectorize(obs_to_coupon.get)(knock_out_date[is_knock_out])
+            # 敲出部分的收益
+            knock_out_payoff = np.sum(prod.s0 * (coupon_out * pay_dates_vec + prod.margin_lvl)
+                                      * self.process.interest.disc_factor(pay_dates_tau_vec))
+        else:
+            knock_out_payoff = 0
         value = (hold_payoff + knock_out_payoff) / self.n_path
         return value

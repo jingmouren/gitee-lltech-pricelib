@@ -11,7 +11,7 @@ from pricelib import *
 def lite():
     """简易定价接口"""
     option = ParachuteSnowball(maturity=2, lock_term=3, s0=100, barrier_out=103, barrier_out_final=90, barrier_in=75,
-                               coupon_out=0.102, coupon_div=0.02, s=100, r=0.02, q=0.03, vol=0.15)
+                               coupon_out=0.117, coupon_div=0.02, s=100, r=0.02, q=0.03, vol=0.15)
     return option.pv_and_greeks()
 
 
@@ -26,7 +26,7 @@ def run():
     volatility = BlackConstVol(0.15, name="中证1000波动率")
     # 2. 随机过程，BSM价格动态
     process = GeneralizedBSMProcess(spot=spot_price, interest=riskfree, div=dividend, vol=volatility)
-    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、有限差分、数值积分
+    # 3. 定价引擎，包括蒙特卡洛模拟、有限差分、数值积分
     mc_engine = MCAutoCallableEngine(process, n_path=100000, rands_method=RandsMethod.Pseudorandom,
                                      antithetic_variate=True, ld_method=LdMethod.Sobol, seed=0)
     quad_engine = QuadSnowballEngine(process, quad_method=QuadMethod.Simpson, n_points=1301)
@@ -35,7 +35,7 @@ def run():
     # 4. 定义产品：降落伞雪球
     option = ParachuteSnowball(maturity=2, s0=100, start_date=datetime.date(2023, 5, 8),
                                trade_calendar=CN_CALENDAR, barrier_out=103, barrier_out_final=90, barrier_in=75,
-                               coupon_out=0.102, coupon_div=0.02, lock_term=3, pay_dates=None, engine=None,
+                               coupon_out=0.117, coupon_div=0.02, lock_term=3, pay_dates=None, engine=None,
                                status=StatusType.NoTouch)
     # 5.为产品设置定价引擎
     option.set_pricing_engine(mc_engine)

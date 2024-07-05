@@ -27,10 +27,16 @@ class QuadDigitalEngine(QuadEngine):
         if spot is None:
             spot = self.process.spot()
 
+        if tau == 0:  # 估值日是到期日
+            if prod.callput == CallPut.Call:
+                return prod.rebate if spot >= prod.strike else 0
+            elif prod.callput == CallPut.Put:
+                return prod.rebate if spot <= prod.strike else 0
+
         r = self.process.interest(tau)
         q = self.process.div(tau)
         vol = self.process.vol(tau, spot)
-        dt = prod.discrete_obs_interval
+        dt = 1 / prod.t_step_per_year if prod.discrete_obs_interval is None else prod.discrete_obs_interval
         self.backward_steps = round(tau / dt)
         self._check_method_params()
 
@@ -51,18 +57,20 @@ class QuadDigitalEngine(QuadEngine):
             value = self.fft_step_backward(np.log(np.array([spot])), self.ln_s_vec, v_vec, tau)[0]
         # 美式：
         elif prod.exercise_type == ExerciseType.American:
+            # 如果估值时的标的价格已经触碰行权价，直接返回行权收益的现值
+            if (prod.callput == CallPut.Call and spot >= prod.strike) or (
+                    prod.callput == CallPut.Put and spot <= prod.strike):
+                return self.get_rebate_pv(prod, r, tau)
+
             for step in range(self.backward_steps - 1, 0, -1):
-                if prod.payment_type == PaymentType.Hit:
-                    rebate_v = prod.rebate
-                elif prod.payment_type == PaymentType.Expire:
-                    rebate_v = prod.rebate * math.exp(-r * dt * (self.backward_steps - step))
-                else:
-                    raise ValueError("Invalid payment type")
+                rebate_v = self.get_rebate_pv(prod, r, dt * (self.backward_steps - step))
                 if prod.callput == CallPut.Call:
-                    v_vec[:strike_point] = self.fft_step_backward(self.ln_s_vec[:strike_point], self.ln_s_vec, v_vec, dt)
+                    v_vec[:strike_point] = self.fft_step_backward(self.ln_s_vec[:strike_point], self.ln_s_vec,
+                                                                  v_vec, dt)
                     v_vec[strike_point:] = rebate_v
                 elif prod.callput == CallPut.Put:
-                    v_vec[strike_point:] = self.fft_step_backward(self.ln_s_vec[strike_point:], self.ln_s_vec, v_vec, dt)
+                    v_vec[strike_point:] = self.fft_step_backward(self.ln_s_vec[strike_point:], self.ln_s_vec,
+                                                                  v_vec, dt)
                     v_vec[:strike_point] = rebate_v
                 else:
                     raise ValueError("Invalid call put type")
@@ -71,3 +79,14 @@ class QuadDigitalEngine(QuadEngine):
         else:
             raise ValueError("ExerciseType must be American or European")
         return value
+
+    @staticmethod
+    def get_rebate_pv(prod, r, tau):
+        """计算行权收益的现值"""
+        if prod.payment_type == PaymentType.Hit:
+            rebate_v = prod.rebate
+        elif prod.payment_type == PaymentType.Expire:
+            rebate_v = prod.rebate * math.exp(-r * tau)
+        else:
+            raise ValueError("Invalid payment type")
+        return rebate_v

@@ -36,7 +36,7 @@ def run():
     # 2. 随机过程，BSM价格动态
     process = GeneralizedBSMProcess(spot=spot_price, interest=riskfree, div=dividend, vol=volatility)
 
-    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、二叉树、有限差分、数值积分
+    # 3. 定价引擎，包括解析解、蒙特卡洛模拟、二叉树
     an_engine = AnalyticAsianEngine(process)
     mc_engine = MCAsianEngine(process, n_path=100000, rands_method=RandsMethod.Pseudorandom,
                               antithetic_variate=True, ld_method=LdMethod.Halton, seed=0)
@@ -44,31 +44,36 @@ def run():
 
     # 4. 定义产品：亚式期权 - 算术平均/几何平均，增强亚式，替代标的资产价格
     results = []
-    for ave_method in AverageMethod:
-        for callput in CallPut:
-            for enhanced in [False, True]:
-                option = AsianOption(callput=callput, ave_method=ave_method, strike=100, maturity=1,
-                                     substitute=AsianAveSubstitution.Underlying, enhanced=enhanced, limited_price=100,
-                                     start_date=datetime.date(2023, 1, 5),
-                                     end_date=None, obs_start=None, obs_end=None, t_step_per_year=243)
-                # 5.为产品设置定价引擎
-                if not enhanced:
-                    option.set_pricing_engine(an_engine)
-                    price_an = option.price()
-                else:
-                    price_an = np.nan
+    for substitute in AsianAveSubstitution:  # AsianAveSubstitution.Underlying替代标的结算价；AsianAveSubstitution.Strike替代执行价
+        for ave_method in AverageMethod:  # AverageMethod.Geometric几何平均；AverageMethod.Arithmetic算术平均
+            for callput in CallPut:  # 看涨/看跌
+                for enhanced in [False, True]:  # 是否是增强亚式
+                    if substitute == AsianAveSubstitution.Strike and enhanced:
+                        continue
+                    option = AsianOption(callput=callput, ave_method=ave_method, strike=100, maturity=1,
+                                         substitute=substitute, enhanced=enhanced, limited_price=100,
+                                         start_date=datetime.date(2023, 1, 5),
+                                         end_date=None, obs_start=None, obs_end=None)
+                    # 5.为产品设置定价引擎
+                    if not enhanced and substitute == AsianAveSubstitution.Underlying:
+                        option.set_pricing_engine(an_engine)
+                        price_an = option.price()
+                    else:
+                        price_an = np.nan
 
-                option.set_pricing_engine(mc_engine)
-                price_mc = option.price()
+                    option.set_pricing_engine(mc_engine)
+                    price_mc = option.price()
 
-                if not enhanced and ave_method == AverageMethod.Arithmetic:
-                    option.set_pricing_engine(bitree_engine)
-                    price_tree = option.price()
-                else:
-                    price_tree = np.nan
+                    if (not enhanced and ave_method == AverageMethod.Arithmetic
+                            and substitute == AsianAveSubstitution.Underlying):
+                        option.set_pricing_engine(bitree_engine)
+                        price_tree = option.price()
+                    else:
+                        price_tree = np.nan
 
-                # 将结果添加到列表中
-                results.append([str(option), price_an, price_mc, price_tree])
+                    # 将结果添加到列表中
+                    results.append([str(option), price_an, price_mc, price_tree])
+
     df = pd.DataFrame(results, columns=['类型', '闭式解', 'MonteCarlo', '二叉树'])
     return df
 
