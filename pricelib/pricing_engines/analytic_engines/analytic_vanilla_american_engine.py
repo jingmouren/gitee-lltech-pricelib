@@ -132,7 +132,7 @@ class AnalyticVanillaAmEngine(AnalyticEngine):
         K = 1 - math.exp(-self.r * self.T)
         self.q_star = (-(N - 1) + self.prod.callput.value * math.sqrt((N - 1) ** 2 + 4 * M / K)) * 0.5
 
-        s_inf = self.prod.strike / (1 - 2 / (N + 1 + self.prod.callput.value * ((N - 1) ** 2 + 4 * M) ** 0.5))
+        s_inf = self.prod.strike / (1 - 2 / (-N + 1 + self.prod.callput.value * ((N - 1) ** 2 + 4 * M) ** 0.5))
         h = -((self.r - self.q) * self.T + self.prod.callput.value * 2 * self.vol * self.T ** 0.5) * (
                 self.prod.strike / (s_inf - self.prod.strike))
 
