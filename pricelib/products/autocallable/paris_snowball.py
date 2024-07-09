@@ -29,7 +29,7 @@ class ParisSnowball(AutocallableBase):
             knockout_freq: 敲出观察频率，"w"表示每周观察，"m"表示每月观察
         可选参数:
             若未提供引擎的情况下，提供了标的价格、无风险利率、分红/融券率、波动率，
-            则默认使用巴黎雪球蒙特卡洛模拟定价引擎 FdmSnowBallEngine
+            则默认使用巴黎雪球蒙特卡洛模拟定价引擎 MCParisSnowballEngine
             s: float，标的价格
             r: float，无风险利率
             q: float，分红/融券率
